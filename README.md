@@ -120,7 +120,7 @@ These are experimental results, not evidence of infinite context, superior reaso
 
 ## Skill para agentes
 
-La skill [dcy-context](skills/dcy-context/SKILL.md) explica cuándo y cómo un agente usa DCY vía MCP o CLI: crea un goal, pide una vista acotada, recupera source exacto y guarda observaciones. [AGENTS.md](AGENTS.md) la señala a los agentes que trabajan en este repositorio. Para integrar DCY en el bucle de otro agente, sigue el [contrato de host](skills/dcy-context/references/host-integration.md): el host conserva el control del modelo y cuenta los tokens reales; DCY aporta recuperación y representación. La skill vive en este repo y puede copiarse a la ubicación de skills del host si éste no descubre skills locales automáticamente.
+The skill [dcy-context](skills/dcy-context/SKILL.md) explains when and how an agent uses DCY via MCP or CLI: it creates a goal, requests a scoped view, retrieves the exact source, and saves observations. [AGENTS.md](AGENTS.md) points it out to the agents working in this repository. To integrate DCY into another agent's loop, follow the [host contract](skills/dcy-context/references/host-integration.md): the host keeps control of the model and counts the actual tokens; DCY provides retrieval and representation. The skill lives in this repo and can be copied to the host's skills location if it doesn't automatically discover local skills.
 
 ## Current boundaries
 
