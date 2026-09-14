@@ -1,0 +1,2 @@
+{"id":"login-flow","goal":"login","gold":["auth.cpp:login","auth.cpp:subscription_active"]}
+{"id":"http-403","goal":"403","gold":["auth.cpp:login"]}

@@ -1,0 +1,18 @@
+{"id":"d01-allocator","category":"direct","goal":"Find the function that sets custom memory allocator callbacks","gold":["src/alloc.c:ts_set_allocator"]}
+{"id":"d02-abi","category":"direct","goal":"Find the function that reports language ABI version","gold":["src/language.c:ts_language_abi_version"]}
+{"id":"d03-field","category":"direct","goal":"Find the function that maps a field name to its field ID","gold":["src/language.c:ts_language_field_id_for_name"]}
+{"id":"d04-sibling","category":"direct","goal":"Find the tree cursor function that advances to the next sibling","gold":["src/tree_cursor.c:ts_tree_cursor_goto_next_sibling"]}
+{"id":"d05-capture","category":"direct","goal":"Find the query cursor function that returns the next capture","gold":["src/query.c:ts_query_cursor_next_capture"]}
+{"id":"d06-ranges","category":"direct","goal":"Find the parser function that sets included ranges","gold":["src/parser.c:ts_parser_set_included_ranges"]}
+{"id":"d07-lookahead","category":"direct","goal":"Find the function that creates a lookahead iterator","gold":["src/language.c:ts_lookahead_iterator_new"]}
+{"id":"d08-changes","category":"direct","goal":"Find the tree function that computes changed ranges","gold":["src/tree.c:ts_tree_get_changed_ranges"]}
+{"id":"p01-allocator","category":"paraphrase","goal":"Where does the runtime accept replacement malloc realloc and free hooks?","gold":["src/alloc.c:ts_set_allocator"]}
+{"id":"p02-abi","category":"paraphrase","goal":"Which routine exposes the grammar compatibility number?","gold":["src/language.c:ts_language_abi_version"]}
+{"id":"p03-field","category":"paraphrase","goal":"Where is a textual child-role label converted into an integer identifier?","gold":["src/language.c:ts_language_field_id_for_name"]}
+{"id":"p04-tree-edit","category":"paraphrase","goal":"Where are node positions shifted after bytes are inserted into the document?","gold":["src/tree.c:ts_tree_edit"]}
+{"id":"p05-capture","category":"paraphrase","goal":"Which routine emits the next captured syntax node from pattern execution?","gold":["src/query.c:ts_query_cursor_next_capture"]}
+{"id":"m01-edit","category":"multi-hop","goal":"Trace tree edit and subtree edit propagation","gold":["src/tree.c:ts_tree_edit","src/subtree.c:ts_subtree_edit"]}
+{"id":"m02-recovery","category":"multi-hop","goal":"Trace parser error handling and candidate recovery actions","gold":["src/parser.c:ts_parser__handle_error","src/parser.c:ts_parser__process_candidate_recovery_actions"]}
+{"id":"m03-string","category":"multi-hop","goal":"Trace parsing a string with a specific input encoding","gold":["src/parser.c:ts_parser_parse_string","src/parser.c:ts_parser_parse_string_encoding"]}
+{"id":"m04-reuse","category":"multi-hop","goal":"Trace cached token lookup and reuse of an existing syntax node","gold":["src/parser.c:ts_parser__get_cached_token","src/parser.c:ts_parser__reuse_node"]}
+{"id":"m05-match-limit","category":"multi-hop","goal":"Trace query cursor match limit configuration and overflow detection","gold":["src/query.c:ts_query_cursor_set_match_limit","src/query.c:ts_query_cursor_did_exceed_match_limit"]}
