@@ -31,6 +31,97 @@ This repository contains the first executable slice of [DCY v0.1](DCY-v0.1.md). 
 Repository → Project Context Image → Session DB → Goal Working Set
            → Context Distiller → ORMT → Physical Tokens → Transformer
 ```
+## DCY Experimental Equation
+
+The original intuition behind DCY came from trying to represent how much useful external context can remain addressable while reducing the physical working set processed by the model.
+
+Start with the simplified quadratic attention term for a context of size `N`:
+
+```math
+C \propto N^2
+```
+
+If the context can be divided into `G` goal-addressable regions, the idealized working set required for one goal becomes:
+
+```math
+K = \frac{N}{G}
+```
+
+Therefore:
+
+```math
+K^2 = \left(\frac{N}{G}\right)^2
+```
+
+DCY then introduces three quantities:
+
+* `VT` — addressable **Virtual Tokens**
+* `C_goal` — usefulness or continuity of context for the active goal
+* `DB` — effective utility of the dynamic external context database
+
+This leads to the original experimental DCY equation:
+
+```math
+\boxed{
+E_{DCY}
+=
+\frac{
+VT \cdot C_{goal} \cdot DB
+}{
+(N/G)^2
+}
+}
+```
+
+The derivation can be summarized as:
+
+```math
+N^2
+```
+
+↓ goal-addressed partitioning
+
+```math
+\left(\frac{N}{G}\right)^2
+```
+
+↓ external virtual context, goal relevance, and dynamic database
+
+```math
+\boxed{
+E_{DCY}
+=
+\frac{
+VT \cdot C_{goal} \cdot DB
+}{
+(N/G)^2
+}
+}
+```
+
+Equivalently:
+
+```math
+\boxed{
+E_{DCY}
+=
+\frac{
+VT \cdot C_{goal} \cdot DB \cdot G^2
+}{
+N^2
+}
+}
+```
+
+This equation is an **experimental heuristic for DCY**, not a claim that DCY changes the asymptotic complexity of the transformer itself.
+
+The denominator
+
+```math
+\left(\frac{N}{G}\right)^2
+```
+
+represents the original intuition of reducing the physical working set through goal-addressed partitioning, while `VT`, `C_goal`, and `DB` represent the useful external context that DCY attempts to keep addressable.
 
 Formalmente:
 
