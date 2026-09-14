@@ -108,7 +108,15 @@ python3 bench/retrieval.py --dcy build/dcy --repo tests/fixture \
 
 The JSON output records index time, per-query CLI latency, context bytes, and gold-symbol recall. This is a retrieval ablation, **not** an LLM task-success benchmark. `query-fts` excludes graph expansion; `query` includes it. Add `query-mlpack` to `--modes` only in an mlpack-enabled build. The fixture tasks are a pipeline check, not evidence that DCY beats another method.
 
-The [2026-09-14 exploratory results](bench/results-2026-09-14.md) include an 18-task Tree-sitter retrieval ablation and a small local-model identification pilot. At 512 bytes, FTS and FTS+graph both reached only 44.4% mean target-symbol recall; the model pilot had no exact task matches. These are negative/limited early results, not a claim of superior reasoning or million-token addressability.
+The [2026-09-14 exploratory results](bench/results-2026-09-14.md) include the full ablations, raw checkpoint artifacts, and scale pilots. The current experimental checkpoint is **E1**: coverage-first packing and name-first ORMT changed injected recall from 0.500 to 0.611, answer recall from 0.111 to 0.500, and `U(model,renderer)` from 0.222 to 0.818 on the same nine-task 0.5B pilot; candidate recall stayed at 0.778, so the gain came from propagation rather than retrieval. `ctest` passes 4/4. E1 artifacts are under `bench/checkpoints/`.
+
+## 1M virtual tokens / 500-token model context
+
+A scale pilot built a **1,002,132-token** corpus using `cl100k_base`, indexed 431 C/C++ files into an 8.5 MB SQLite database, and served it through DCY to `qwen2.5:0.5b-instruct` configured with Ollama `num_ctx=500`. The physical DCY view remained bounded to 512 bytes; its mean model input was 334.2 tokens and the maximum recorded input plus requested output was 406 tokens. On 20 held-out generated tasks, candidate recall was 0.875, injected recall 0.725, and answer recall 0.525. Five generations hit the intentionally conservative 64-token output cap, so this is a bounded-context/transport result, **not** a claim that arbitrary tasks can be solved in 500 tokens.
+
+Matched-scale runs with the same 16 tasks across 100k → 1M VT measured prompt growth of 0.5% at a 512-byte budget and 6.6% at 2,048 bytes. A distractor-controlled run kept the 100k Tree-sitter base files and gold tasks fixed while adding unrelated Redis/curl/SQLite files: the 512-byte prompt grew 3.9%, but recall fell from 0.688 to 0.625 (`DR=0.908`). Thus DCY currently demonstrates **scale isolation of physical prompt size**, while distractor resistance remains an open retrieval problem. VCR is an addressability ratio, not comprehension.
+
+These are experimental results, not evidence of infinite context, superior reasoning, or validated code repair. See the [reproducible results](bench/results-2026-09-14.md), `bench/matched_scale.py`, `bench/build_distractor_corpus.py`, and `bench/scale.py`.
 
 ## Skill para agentes
 
