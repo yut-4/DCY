@@ -1,0 +1,309 @@
+{
+  "kind": "goal_trajectory_validation",
+  "budget_bytes": 512,
+  "virtual_tokens": 1000000.0,
+  "partitions": 100.0,
+  "lambda_cost": 0.001,
+  "tasks": 2,
+  "trajectories": 6,
+  "records": [
+    {
+      "task": "login-diagnosis-external",
+      "route": "focused",
+      "success": true,
+      "steps": 1,
+      "E_DCY_sigma": 0.01,
+      "mean_E_DCY": 0.01,
+      "cost": 19.5829912,
+      "J_DCY": -0.0095829912,
+      "observed_utility": 0.0510647219205205,
+      "measurements": [
+        {
+          "goal": "login",
+          "selected": [
+            "auth.cpp:login",
+            "auth.cpp:subscription_active"
+          ],
+          "required": [
+            "auth.cpp:login",
+            "auth.cpp:subscription_active"
+          ],
+          "relevant": [
+            "auth.cpp:login",
+            "auth.cpp:subscription_active"
+          ],
+          "C_goal": 1.0,
+          "DB": 1.0,
+          "continuity": 0.0,
+          "E_DCY": 0.01,
+          "prompt_tokens_proxy": 17,
+          "latency_ms": 15.83,
+          "cost": 19.5829912
+        }
+      ]
+    },
+    {
+      "task": "login-diagnosis-external",
+      "route": "scattered",
+      "success": true,
+      "steps": 2,
+      "E_DCY_sigma": 0.015,
+      "mean_E_DCY": 0.0075,
+      "cost": 38.8299119,
+      "J_DCY": -0.0238299119,
+      "observed_utility": 0.02575334197448952,
+      "measurements": [
+        {
+          "goal": "403",
+          "selected": [
+            "auth.cpp:login",
+            "auth.cpp:subscription_active"
+          ],
+          "required": [
+            "auth.cpp:login"
+          ],
+          "relevant": [
+            "auth.cpp:login"
+          ],
+          "C_goal": 0.5,
+          "DB": 1.0,
+          "continuity": 0.0,
+          "E_DCY": 0.005,
+          "prompt_tokens_proxy": 17,
+          "latency_ms": 14.201,
+          "cost": 19.420128300000002
+        },
+        {
+          "goal": "login",
+          "selected": [
+            "auth.cpp:login",
+            "auth.cpp:subscription_active"
+          ],
+          "required": [
+            "auth.cpp:login",
+            "auth.cpp:subscription_active"
+          ],
+          "relevant": [
+            "auth.cpp:login",
+            "auth.cpp:subscription_active"
+          ],
+          "C_goal": 1.0,
+          "DB": 1.0,
+          "continuity": 0.5,
+          "E_DCY": 0.01,
+          "prompt_tokens_proxy": 17,
+          "latency_ms": 14.098,
+          "cost": 19.4097836
+        }
+      ]
+    },
+    {
+      "task": "login-diagnosis-external",
+      "route": "distracted",
+      "success": true,
+      "steps": 3,
+      "E_DCY_sigma": 0.01,
+      "mean_E_DCY": 0.0033333333333333335,
+      "cost": 36.7204474,
+      "J_DCY": -0.0267204474,
+      "observed_utility": 0.027232783661562905,
+      "measurements": [
+        {
+          "goal": "database connection",
+          "selected": [],
+          "required": [],
+          "relevant": [],
+          "C_goal": 0.0,
+          "DB": 0.0,
+          "continuity": 0.0,
+          "E_DCY": 0.0,
+          "prompt_tokens_proxy": 6,
+          "latency_ms": 15.268,
+          "cost": 8.5268441
+        },
+        {
+          "goal": "user interface",
+          "selected": [],
+          "required": [],
+          "relevant": [],
+          "C_goal": 0.0,
+          "DB": 0.0,
+          "continuity": 0.0,
+          "E_DCY": 0.0,
+          "prompt_tokens_proxy": 6,
+          "latency_ms": 14.88,
+          "cost": 8.4880336
+        },
+        {
+          "goal": "login",
+          "selected": [
+            "auth.cpp:login",
+            "auth.cpp:subscription_active"
+          ],
+          "required": [
+            "auth.cpp:login",
+            "auth.cpp:subscription_active"
+          ],
+          "relevant": [
+            "auth.cpp:login",
+            "auth.cpp:subscription_active"
+          ],
+          "C_goal": 1.0,
+          "DB": 1.0,
+          "continuity": 0.0,
+          "E_DCY": 0.01,
+          "prompt_tokens_proxy": 17,
+          "latency_ms": 17.056,
+          "cost": 19.705569699999998
+        }
+      ]
+    },
+    {
+      "task": "status-diagnosis-external",
+      "route": "direct",
+      "success": true,
+      "steps": 1,
+      "E_DCY_sigma": 0.005,
+      "mean_E_DCY": 0.005,
+      "cost": 19.5649931,
+      "J_DCY": -0.0145649931,
+      "observed_utility": 0.051111697044247874,
+      "measurements": [
+        {
+          "goal": "403",
+          "selected": [
+            "auth.cpp:login",
+            "auth.cpp:subscription_active"
+          ],
+          "required": [
+            "auth.cpp:login"
+          ],
+          "relevant": [
+            "auth.cpp:login"
+          ],
+          "C_goal": 0.5,
+          "DB": 1.0,
+          "continuity": 0.0,
+          "E_DCY": 0.005,
+          "prompt_tokens_proxy": 17,
+          "latency_ms": 15.65,
+          "cost": 19.5649931
+        }
+      ]
+    },
+    {
+      "task": "status-diagnosis-external",
+      "route": "wrong-first",
+      "success": false,
+      "steps": 2,
+      "E_DCY_sigma": 0.0,
+      "mean_E_DCY": 0.0,
+      "cost": 14.7841659,
+      "J_DCY": -0.0147841659,
+      "observed_utility": 0.0,
+      "measurements": [
+        {
+          "goal": "database",
+          "selected": [],
+          "required": [],
+          "relevant": [],
+          "C_goal": 0.0,
+          "DB": 0.0,
+          "continuity": 0.0,
+          "E_DCY": 0.0,
+          "prompt_tokens_proxy": 5,
+          "latency_ms": 13.88,
+          "cost": 7.3880102999999995
+        },
+        {
+          "goal": "logging",
+          "selected": [],
+          "required": [],
+          "relevant": [],
+          "C_goal": 0.0,
+          "DB": 0.0,
+          "continuity": 0.0,
+          "E_DCY": 0.0,
+          "prompt_tokens_proxy": 5,
+          "latency_ms": 13.962,
+          "cost": 7.3961556
+        }
+      ]
+    },
+    {
+      "task": "status-diagnosis-external",
+      "route": "redundant",
+      "success": true,
+      "steps": 2,
+      "E_DCY_sigma": 0.01,
+      "mean_E_DCY": 0.005,
+      "cost": 39.1411607,
+      "J_DCY": -0.0291411607,
+      "observed_utility": 0.025548552524146274,
+      "measurements": [
+        {
+          "goal": "login",
+          "selected": [
+            "auth.cpp:login",
+            "auth.cpp:subscription_active"
+          ],
+          "required": [
+            "auth.cpp:login"
+          ],
+          "relevant": [
+            "auth.cpp:login"
+          ],
+          "C_goal": 0.5,
+          "DB": 1.0,
+          "continuity": 0.0,
+          "E_DCY": 0.005,
+          "prompt_tokens_proxy": 17,
+          "latency_ms": 14.147,
+          "cost": 19.4146661
+        },
+        {
+          "goal": "403",
+          "selected": [
+            "auth.cpp:login",
+            "auth.cpp:subscription_active"
+          ],
+          "required": [
+            "auth.cpp:login"
+          ],
+          "relevant": [
+            "auth.cpp:login"
+          ],
+          "C_goal": 0.5,
+          "DB": 1.0,
+          "continuity": 1.0,
+          "E_DCY": 0.005,
+          "prompt_tokens_proxy": 17,
+          "latency_ms": 17.265,
+          "cost": 19.7264946
+        }
+      ]
+    }
+  ],
+  "spearman_J_vs_observed_utility": 0.5428571428571428,
+  "best_route_matches": 2,
+  "best_route_comparisons": [
+    {
+      "task": "login-diagnosis-external",
+      "best_by_J": "focused",
+      "best_observed": "focused",
+      "same_best": true
+    },
+    {
+      "task": "status-diagnosis-external",
+      "best_by_J": "direct",
+      "best_observed": "direct",
+      "same_best": true
+    }
+  ],
+  "limitations": [
+    "offline candidate trajectories; no planner is implemented",
+    "C_goal and DB are observable gold-based proxies for this fixture",
+    "success labels are manifest inputs and must come from tests/review in real benchmarks",
+    "cost components use prompt word count and latency normalization, not billing units"
+  ]
+}

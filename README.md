@@ -112,11 +112,218 @@ N^2
 
 This equation is an **experimental heuristic for DCY**, not a claim that DCY changes the asymptotic complexity of the transformer itself.
 
+### Per-goal and session-aggregate efficiency
+
+The equation above is local: it describes one goal and its working set. A stateful DCY session is a trajectory of goals:
+
+```math
+\pi = (g_1,g_2,\ldots,g_T)
+```
+
+For each step, retain the original local definition:
+
+```math
+\boxed{
+E_{DCY}(g_t)
+=
+\frac{VT_t \cdot C_{goal,t} \cdot DB_t}
+{(N/G_t)^2}
+}
+```
+
+The accumulated efficiency of the whole trajectory is then:
+
+```math
+\boxed{
+E_{DCY}^{\Sigma}(\pi)
+=
+\sum_{t=1}^{T} E_{DCY}(g_t)
+=
+\sum_{t=1}^{T}
+\frac{VT_t \cdot C_{goal,t} \cdot DB_t}
+{(N/G_t)^2}
+}
+```
+
+`E_DCY(g_t)` is the efficiency of one goal/working set. `E_DCY^Σ(π)` is the total contextual utility produced across a stateful session, long task, or goal trajectory. Because a sum tends to increase when more goals are added, comparisons between sessions should also report the per-goal average:
+
+```math
+\boxed{
+\bar E_{DCY}(\pi)
+=
+\frac{1}{T}\sum_{t=1}^{T}E_{DCY}(g_t)
+}
+```
+
+The Goal Engine is not merely choosing independent queries. Each goal updates state and influences the next one:
+
+```math
+S_{t+1}=Update(S_t,g_t,R_t)
+```
+
+```math
+g_{t+1}=Select(G,S_{t+1})
+```
+
+A useful operational interpretation is that goal continuity depends on the current state:
+
+```math
+C_{goal,t}=Rel(g_t,S_{t-1})
+```
+
+This makes a goal that is unrelated to the evidence already established contribute little to the aggregate, even if its isolated retrieval looks good. In implementation terms, a trajectory might move from `locate → inspect → decide → retrieve source → validate → result`, with observations and validated facts carried through the session.
+
+For optimization, maximizing the raw sum would reward unnecessarily long trajectories. The practical objective therefore subtracts the cost of each step:
+
+```math
+\boxed{
+J_{DCY}(\pi)
+=
+E_{DCY}^{\Sigma}(\pi)-\lambda Cost(\pi)
+}
+```
+
+where a first operational cost model is:
+
+```math
+Cost(\pi)=\sum_{t=1}^{T}(PT_t+L_t+A_t)
+```
+
+with `PT_t` physical tokens used, `L_t` latency, and `A_t` model/API cost. The intended optimization is consequently:
+
+```math
+\boxed{
+\pi^*
+=
+\arg\max_{\pi}
+\left[
+\sum_{t=1}^{T}E_{DCY}(g_t)-\lambda Cost(\pi)
+\right]
+}
+```
+
+These aggregate equations are experimental definitions, and `src/efficiency.hpp` now provides an isolated metric utility for evaluating them. The current MVP still does not connect this utility to automatic trajectory planning or goal selection, and it does not optimize `J_DCY`; `tests/efficiency_test.cpp` verifies the local equation, sigma aggregate, per-goal average, continuity effect, cost objective, and invalid-input guards. They formalize the distinction between local signal preservation and session-level goal continuity.
+
+### E2 — Goal Trajectory Validation
+
+`bench/trajectory_benchmark.py` is the first offline test of whether `J_DCY` orders candidate goal trajectories like observed utility. It does not implement a planner: the manifest supplies candidate routes and externally declared success labels, while the runner executes each step through the real DCY CLI and derives observable proxies:
+
+```text
+C_goal = relevant selected evidence / selected evidence
+DB     = relevant selected evidence / required evidence
+```
+
+For each route it computes `E_DCY(g_t)`, `E_DCY^Σ(π)`, `J_DCY(π)`, total step cost, and observed success per cost. On the initial authentication fixture, two tasks and six candidate trajectories produced:
+
+```text
+best route selected by J_DCY: 2/2 tasks
+Spearman rho(J_DCY, observed utility): 0.4928
+```
+
+This is a useful but weak first result: `J_DCY` selected the best observed route in both fixture tasks, but `ρ=0.4928` is far from predictive validation. The route labels are manifest inputs in this fixture, not hidden test outcomes, and cost currently uses prompt word count plus normalized latency/API terms rather than billing units. E2 therefore remains an offline methodology test; larger trajectory manifests with test-verified success are required before implementing a Goal Planner.
+
+### E3 — Objective Calibration & Generalization
+
+`bench/objective_calibration.py` scales the offline test to 100 generated tasks and 500 deterministic candidate trajectories (five routes per task), with a stable design/held-out split. It calibrates `λ` only on design and freezes it on held-out. The route success proxy is gold-evidence coverage across the route; it is not hidden-test success.
+
+The comparison is deliberately broader than `J_DCY`:
+
+```text
+E_DCY^Σ       accumulated contextual utility
+Ē_DCY         per-goal average
+-Cost         cheapest-route control
+J_DCY         EΣ - λ Cost
+J_norm        normalized EΣ - λ normalized Cost
+Random        deterministic negative control
+```
+
+Results:
+
+| Metric | Design agreement | Design ρ | Held-out agreement | Held-out ρ |
+|---|---:|---:|---:|---:|
+| `E_DCY^Σ` | 0.283 | 0.8303 | 0.175 | 0.8029 |
+| `Ē_DCY` | 0.950 | 0.8713 | **0.975** | **0.8825** |
+| `-Cost` | 0.050 | -0.1160 | 0.175 | 0.0004 |
+| `J_DCY` | 0.500 | 0.1221 | 0.725 | 0.2683 |
+| `J_norm` | 0.567 | 0.5026 | 0.475 | 0.5883 |
+| `Random` | 0.217 | -0.0228 | 0.125 | 0.0286 |
+
+The current E3 hypothesis — that `J_DCY` ranks held-out trajectories better than `EΣ`, `-Cost`, and random — is **not supported**. `Ē_DCY` wins this fixture decisively, while `J_DCY` underperforms it (`ρ=0.2683` versus `0.8825` held-out). This does not yet prove that the formula is wrong: the benchmark's observed utility is success divided by cost, while `J_DCY` is an additive utility-minus-penalty objective, and the cost components are normalized proxies. It does prove that the current `λ`/cost geometry cannot be used to justify an automatic planner.
+
+E3 is therefore frozen as a negative/diagnostic result, not an optimization milestone. Before changing the equation, the next experiment should hold the route labels and costs constant while comparing alternative objective geometries — ratio, additive, normalized additive — and use test-verified success on real multi-step tasks. No Goal Planner is implemented.
+
+Run it with:
+
+```sh
+python3 bench/objective_calibration.py --dcy build/dcy \
+  --db build/corpus-1m.sqlite --tasks bench/corpus-1m-tasks.jsonl \
+  --budget-bytes 512 --virtual-tokens 1002132 --partitions 100 \
+  --out build/e3-objective-calibration.json
+```
+
+### E4 — External Utility Validation
+
+E4 removes route-level success labels from the test. `bench/trajectory_benchmark.py --external` retrieves the entity references, calls `dcy source`, and checks independent source assertions such as `return 403` and `active && !expired`. The metric never participates in defining success.
+
+On the authentication fixture, two tasks and six routes produced:
+
+```text
+J_DCY vs external success/cost: Spearman rho = 0.5429
+best route agreement:            2/2
+```
+
+This improves on the E2 diagnostic but remains a tiny fixture, not predictive validation. The external verifier changes the result: a route with distractor steps can still succeed if its final step retrieves all required evidence. E4 is therefore a methodology checkpoint showing that success can be measured outside the objective; it does not justify a planner yet. The next valid scale-up is 50–100 trajectories with independently verified tests or source assertions, then compare `EΣ`, `Ē`, ratio, additive `J`, normalized `J`, cost-only and random under a frozen design/held-out split.
+
+### E5 — External Objective Comparison
+
+E5 applies the external-success boundary to the larger objective comparison: 100 tasks, 500 deterministic trajectories, 300 design and 200 held-out. Each required symbol must be retrieved, resolved with `dcy source`, and pass an independently specified source assertion. `λ` and normalization are selected on design only.
+
+| Metric | Design agreement | Design ρ | Held-out agreement | Held-out ρ |
+|---|---:|---:|---:|---:|
+| `E_DCY^Σ` | 0.233 | 0.8313 | 0.175 | 0.8032 |
+| `Ē_DCY` | **1.000** | 0.8732 | **0.975** | **0.8827** |
+| `-Cost` | 0.067 | -0.1037 | 0.150 | 0.0018 |
+| `J_DCY` | 0.633 | 0.1875 | 0.725 | 0.2691 |
+| `J_norm` | 0.733 | 0.4706 | 0.675 | 0.5288 |
+| `Random` | 0.250 | -0.0116 | 0.125 | 0.0313 |
+
+`H_E5` is supported on this benchmark: `Ē_DCY` ranks externally validated trajectories better than `EΣ`, cost-only, additive `J`, normalized `J`, and random. Held-out `ρ=0.8827` and 0.975 route-choice agreement are strong for this fixture, but not universal validation: the tasks are generated, the source assertions are mechanical name/body checks rather than hidden tests, and all routes share the same cost proxy. The practical result is a constraint-first direction — require external correctness for evaluation, then compare efficiency among valid routes — rather than wiring the current `J_DCY` into a planner.
+
+This is retrospective trajectory ranking, not prospective planning. In evaluation, `Success_external(π)` may be observed after executing a preconstructed route. A future planner cannot use that value before execution; it must estimate the next step from current state:
+
+```math
+\boxed{
+\pi^* = \arg\max_{\pi}\widehat{\bar E}_{DCY}(\pi)
+\quad\text{s.t.}\quad Cost(\pi)\le B
+}
+```
+
+External success is then measured after execution:
+
+```math
+Success_{external}(\pi^*)\in\{0,1\}
+```
+
+The first prospective policy experiment is reserved for **E6 — Prospective Planning**: generate candidate next goals from `S_t`, estimate `\widehat{\bar E}_{DCY}(g\mid S_t)`, apply resource limits, execute one choice, update state, and repeat. Compare against fixed-plan, greedy-relevance, and random policies under identical model, task, token and step budgets, using `Success@Budget`. No E6 planner is implemented yet.
+
+The first E5 run exposed and fixed a harness boundary: `dcy source` correctly rejected a gold span larger than the verifier's initial 4 KiB limit. The rerun uses an explicit 1 MiB benchmark limit and records the original failure rather than hiding it.
+
+Reproduce:
+
+```sh
+python3 bench/objective_calibration.py --dcy build/dcy \
+  --db build/corpus-1m.sqlite --tasks bench/corpus-1m-external-tasks.jsonl \
+  --budget-bytes 512 --virtual-tokens 1002132 --partitions 100 --external \
+  --out build/e5-external-objective.json
+```
+
+
 The denominator
 
 ```math
 \left(\frac{N}{G}\right)^2
 ```
+
 
 represents the original intuition of reducing the physical working set through goal-addressed partitioning, while `VT`, `C_goal`, and `DB` represent the useful external context that DCY attempts to keep addressable.
 
