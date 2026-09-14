@@ -1,4 +1,25 @@
+<p align="center">
+  <img
+    src="https://github.com/user-attachments/assets/0bf57c3d-7ee5-40a3-9d8e-13fa5f4208e3"
+    alt="DCY Logo"
+    width="220"
+  />
+</p>
+
+<h1 align="center">DCY</h1>
+
+<p align="center">
+  <strong>Dynamic Context Injection</strong>
+</p>
+
+<p align="center">
+  Goal-driven context virtualization and token-efficient context delivery for LLMs.
+</p>
+
+---
+
 # DCY core MVP
+
 
 This repository contains the first executable slice of [DCY v0.1](DCY-v0.1.md). It indexes C/C++ definitions and resolved calls with libclang, stores file bytes and graph data in SQLite/FTS5, retrieves context by goal, renders it through ORMT, and returns byte-exact source spans. No LLM is invoked by the core: `context` is the handoff point to a model adapter.
 
