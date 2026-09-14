@@ -23,9 +23,6 @@
 
 This repository contains the first executable slice of [DCY v0.1](DCY-v0.1.md). It indexes C/C++ definitions and resolved calls with libclang, stores file bytes and graph data in SQLite/FTS5, retrieves context by goal, renders it through ORMT, and returns byte-exact source spans. No LLM is invoked by the core: `context` is the handoff point to a model adapter.
 
-## Modelo conceptual
-
-**DCY no resume el repositorio entero.** Construye una DB dinámica y, para cada goal, produce una vista temporal con la evidencia que parece suficiente para la siguiente inferencia:
 
 ```text
 Repository → Project Context Image → Session DB → Goal Working Set
