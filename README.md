@@ -204,6 +204,82 @@ with `PT_t` physical tokens used, `L_t` latency, and `A_t` model/API cost. The i
 
 These aggregate equations are experimental definitions, and `src/efficiency.hpp` now provides an isolated metric utility for evaluating them. The current MVP still does not connect this utility to automatic trajectory planning or goal selection, and it does not optimize `J_DCY`; `tests/efficiency_test.cpp` verifies the local equation, sigma aggregate, per-goal average, continuity effect, cost objective, and invalid-input guards. They formalize the distinction between local signal preservation and session-level goal continuity.
 
+### Finite-horizon action value
+
+A trajectory score evaluates a route after it exists. A prospective selector needs a different quantity: expected progress after taking an action from the current state. The transition and one-step progress are:
+
+```math
+\boxed{
+S_{t+1}=T(S_t,a_t,o_t)
+}
+```
+
+```math
+\boxed{
+\Delta\Phi_t
+=
+\Phi(S_{t+1})-\Phi(S_t)
+}
+```
+
+For expected per-step progress deltas `ΔΦ`, a finite-horizon evaluator is:
+
+```math
+\boxed{
+Q_{DCY}^{(h)}(a_t\mid S_t)
+=
+\mathbb E
+\left[
+\sum_{k=0}^{h-1}
+\gamma^k\Delta\Phi_{t+k}
+\;\middle\vert\;
+S_t,a_t
+\right]
+}
+```
+
+The isolated utility `finite_horizon_q` in `src/efficiency.hpp` evaluates a supplied sequence of expected deltas; it is a discounted-return calculator and does not generate futures. The same header now contains a callback-based prospective evaluator:
+
+```math
+\boxed{
+Q_{DCY}^{(h)}(S_t,a_t)
+=
+\mathbb E_{o_t\sim P(\cdot\mid S_t,a_t)}
+\left[
+\Delta\Phi(S_t,a_t,o_t)
++
+\gamma V_{DCY}^{(h-1)}(S_{t+1})
+\right]
+}
+```
+
+with:
+
+```math
+\boxed{
+V_{DCY}^{(h)}(S)
+=
+\max_{a\in\mathcal A(S)}Q_{DCY}^{(h)}(S,a)
+}
+```
+
+and `S_{t+1}=T(S_t,a_t,o_t)`, `V^(0)=0`. `prospective_q` receives action generation, outcome probabilities, transition, progress and constraint callbacks; it knows neither SQLite nor an LLM and does not estimate outcomes by itself. `select_best_action` performs deterministic argmax over scores. The callbacks are the future E6 experiment: no callback may use gold future evidence or success observed after execution.
+
+`tests/efficiency_test.cpp` verifies both levels. With immediate deltas `[0.30,0.02,0]`, horizon one prefers the immediate action; with unlocking deltas `[0.05,0.50,0.30]`, horizon two and `γ=0.8` select the initially weaker action because its Bellman value is `0.45` versus `0.316`. This is a tested finite-horizon evaluator, not evidence that DCY can currently construct useful futures or run an autonomous planner.
+
+The planned prospective decision is therefore distinct from retrospective trajectory ranking:
+
+```math
+\boxed{
+a_t^*
+=
+\arg\max_{a\in\mathcal A(S_t)}
+\widehat Q_{DCY}^{(h)}(a\mid S_t)
+}
+```
+
+The hat matters: `C_goal`, `DB`, future deltas and reachability must be estimated from information available at `S_t`, without using external success observed after execution. E6 will first compare one-step action selection and state updates; short-horizon lookahead is a later ablation.
+
 ### E2 — Goal Trajectory Validation
 
 `bench/trajectory_benchmark.py` is the first offline test of whether `J_DCY` orders candidate goal trajectories like observed utility. It does not implement a planner: the manifest supplies candidate routes and externally declared success labels, while the runner executes each step through the real DCY CLI and derives observable proxies:
@@ -305,6 +381,66 @@ Success_{external}(\pi^*)\in\{0,1\}
 ```
 
 The first prospective policy experiment is reserved for **E6 — Prospective Planning**: generate candidate next goals from `S_t`, estimate `\widehat{\bar E}_{DCY}(g\mid S_t)`, apply resource limits, execute one choice, update state, and repeat. Compare against fixed-plan, greedy-relevance, and random policies under identical model, task, token and step budgets, using `Success@Budget`. No E6 planner is implemented yet.
+
+### E6.0 — Audit before prospective planning
+
+Before building a selector, `bench/e6_audit.py` audits E5 at the unit where a planner would actually decide: **within each task**, not across all routes from all tasks. This prevents global correlation from being inflated by between-task difficulty. It also checks split integrity, routes per task, ties, tasks with no successful route, and future-information leakage.
+
+The audit found:
+
+```text
+tasks:                         100
+trajectories:                  500
+routes per task:               5 for all tasks
+split conflicts:               0
+success-free tasks:            34/100
+```
+
+Within-task results against externally checked success-per-cost utility:
+
+| Score | Mean within-task ρ | Median within-task ρ | Winner agreement |
+|---|---:|---:|---:|
+| `E_DCY^Σ` | 0.4391 | 0.6708 | 0.350 |
+| `Ē_DCY` | 0.6164 | 0.9487 | **0.990** |
+| `-Cost` | -0.0249 | 0.0000 | 0.340 |
+
+The earlier global E5 correlation for `Ē_DCY` was 0.8827; the within-task mean is 0.6164. The difference is a methodological warning, not a contradiction: the global statistic included between-task variation, while a selector needs within-task discrimination. `Ē_DCY` still chooses an observed winning route in 99% of tasks when ties receive credit, but its correlation is substantially weaker once the task is held constant. The 34 tasks with no successful route also cannot provide a meaningful winner comparison and must remain in the denominator rather than being silently filtered.
+
+This changes E6's order. E6.1 must first define a prospective action environment: concrete actions (`search`, `expand`, `read_source`, `increase_resolution`, `verify`, `finish`), state fields for pending obligations, evidence, hypotheses, contradictions, history and remaining resources, plus a candidate generator that uses only the current state, task and accessible index. E6.2 then compares fixed-plan, immediate relevance, marginal obligation coverage, `\widehat{\bar E}_{DCY}`, and random under identical budgets. The selector is evaluated after execution with:
+
+```math
+Success@B
+=\frac{1}{n}\sum_{i=1}^{n}
+\mathbf{1}[solved_i \land usage_i\preceq B]
+```
+
+All attempts remain in the denominator; candidate generation, scoring calls, retries, source reads and model calls count against independent token, call, latency and step limits. Only after that audit passes should a greedy prospective selector be implemented. A short-horizon planner is a later experiment, not part of initial E6.
+
+Run the audit with:
+
+```sh
+python3 bench/e6_audit.py --e5 build/e5-external-objective.json \
+  --out build/e6-0-audit.json
+```
+
+### E6.1 — Prospective environment contract
+
+The Bellman evaluator is now generic, but the planner world remains explicit and domain-independent in `src/planning.hpp`. Its minimum state contains:
+
+```text
+obligations       pending work and statuses
+evidence          entity, generation, source span, claim, confidence
+hypotheses        unverified claims plus supporting entities
+contradictions    incompatible evidence awaiting resolution
+history           actions, repetition and newly produced evidence
+remaining        physical tokens, calls, steps and latency
+```
+
+Actions are closed values — `Search`, `Expand`, `ReadSource`, `Verify`, `IncreaseResolution`, `Finish` — rather than unconstrained text. A hypothesis starts as `Unverified`; model output cannot silently become confirmed evidence. The prospective callbacks must use only `S_t` and `a_t` for estimated outcomes. Benchmark-only environment outcomes and hidden/external success are evaluation data, never inputs to a prospective selector.
+
+`prospective_q` enforces the current mathematical contract: `gamma ∈ [0,1]`, legal actions only, non-negative outcome probabilities, probabilities summing to one, and at least one modeled outcome. A terminal state or state with no legal next action contributes zero future value; finite horizon guarantees termination. Budget propagation belongs in the callback transition, which must decrement `State.remaining`. Memoization by `(StateHash,horizon)` is deliberately not present until the concrete state has a stable hash.
+
+E6.1 is therefore a contract and evaluator test, not a planner result. The remaining empirical objects are `\widehat P(o\mid S,a)` and `\Phi(S)`. E6.2 must first compare next-action policies under a common candidate generator — fixed, immediate relevance, marginal obligation coverage, estimated `Q`, and random — and record unavailable necessary actions separately from bad selections.
 
 The first E5 run exposed and fixed a harness boundary: `dcy source` correctly rejected a gold span larger than the verifier's initial 4 KiB limit. The rerun uses an explicit 1 MiB benchmark limit and records the original failure rather than hiding it.
 
