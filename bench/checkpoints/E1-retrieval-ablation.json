@@ -1,0 +1,218 @@
+{
+  "kind": "retrieval_feature_ablation",
+  "cap": 64,
+  "top": 5,
+  "tasks": 18,
+  "lexical_ceiling": 0.8333,
+  "lexically_unreachable": [
+    "p02-abi",
+    "p03-field",
+    "p04-tree-edit"
+  ],
+  "results": [
+    {
+      "features": "fts",
+      "candidate_recall": 0.4444,
+      "full_gold_rate": 0.3889,
+      "mean_candidates": 5.0,
+      "missed": [
+        "d01-allocator",
+        "d03-field",
+        "d04-sibling",
+        "d07-lookahead",
+        "d08-changes",
+        "p02-abi",
+        "p03-field",
+        "p04-tree-edit",
+        "p05-capture",
+        "m02-recovery",
+        "m04-reuse"
+      ]
+    },
+    {
+      "features": "fts+exact",
+      "candidate_recall": 0.6944,
+      "full_gold_rate": 0.6667,
+      "mean_candidates": 5.0,
+      "missed": [
+        "d01-allocator",
+        "d04-sibling",
+        "p02-abi",
+        "p03-field",
+        "p04-tree-edit",
+        "m02-recovery"
+      ]
+    },
+    {
+      "features": "fts+defn",
+      "candidate_recall": 0.4444,
+      "full_gold_rate": 0.3889,
+      "mean_candidates": 5.0,
+      "missed": [
+        "d01-allocator",
+        "d03-field",
+        "d04-sibling",
+        "d07-lookahead",
+        "d08-changes",
+        "p02-abi",
+        "p03-field",
+        "p04-tree-edit",
+        "p05-capture",
+        "m02-recovery",
+        "m04-reuse"
+      ]
+    },
+    {
+      "features": "fts+kind",
+      "candidate_recall": 0.4444,
+      "full_gold_rate": 0.3889,
+      "mean_candidates": 5.0,
+      "missed": [
+        "d01-allocator",
+        "d03-field",
+        "d04-sibling",
+        "d07-lookahead",
+        "d08-changes",
+        "p02-abi",
+        "p03-field",
+        "p04-tree-edit",
+        "p05-capture",
+        "m02-recovery",
+        "m04-reuse"
+      ]
+    },
+    {
+      "features": "fts+path",
+      "candidate_recall": 0.5,
+      "full_gold_rate": 0.4444,
+      "mean_candidates": 5.0,
+      "missed": [
+        "d01-allocator",
+        "d03-field",
+        "d04-sibling",
+        "d07-lookahead",
+        "p02-abi",
+        "p03-field",
+        "p04-tree-edit",
+        "p05-capture",
+        "m02-recovery",
+        "m04-reuse"
+      ]
+    },
+    {
+      "features": "fts+exact+path",
+      "candidate_recall": 0.8056,
+      "full_gold_rate": 0.7778,
+      "mean_candidates": 5.0,
+      "missed": [
+        "p02-abi",
+        "p03-field",
+        "p04-tree-edit",
+        "m02-recovery"
+      ]
+    },
+    {
+      "features": "fts+exact+defn",
+      "candidate_recall": 0.6944,
+      "full_gold_rate": 0.6667,
+      "mean_candidates": 5.0,
+      "missed": [
+        "d01-allocator",
+        "d04-sibling",
+        "p02-abi",
+        "p03-field",
+        "p04-tree-edit",
+        "m02-recovery"
+      ]
+    },
+    {
+      "features": "fts+exact+defn+kind",
+      "candidate_recall": 0.6944,
+      "full_gold_rate": 0.6667,
+      "mean_candidates": 5.0,
+      "missed": [
+        "d01-allocator",
+        "d04-sibling",
+        "p02-abi",
+        "p03-field",
+        "p04-tree-edit",
+        "m02-recovery"
+      ]
+    },
+    {
+      "features": "fts+exact+defn+kind+path",
+      "candidate_recall": 0.8056,
+      "full_gold_rate": 0.7778,
+      "mean_candidates": 5.0,
+      "missed": [
+        "p02-abi",
+        "p03-field",
+        "p04-tree-edit",
+        "m02-recovery"
+      ]
+    },
+    {
+      "features": "fts+exact+path+graph",
+      "candidate_recall": 0.8056,
+      "full_gold_rate": 0.7778,
+      "mean_candidates": 5.0,
+      "missed": [
+        "p02-abi",
+        "p03-field",
+        "p04-tree-edit",
+        "m02-recovery"
+      ]
+    },
+    {
+      "features": "fts+graph",
+      "candidate_recall": 0.4444,
+      "full_gold_rate": 0.3889,
+      "mean_candidates": 5.0,
+      "missed": [
+        "d01-allocator",
+        "d03-field",
+        "d04-sibling",
+        "d07-lookahead",
+        "d08-changes",
+        "p02-abi",
+        "p03-field",
+        "p04-tree-edit",
+        "p05-capture",
+        "m02-recovery",
+        "m04-reuse"
+      ]
+    },
+    {
+      "features": "fts+exact+graph",
+      "candidate_recall": 0.6944,
+      "full_gold_rate": 0.6667,
+      "mean_candidates": 5.0,
+      "missed": [
+        "d01-allocator",
+        "d04-sibling",
+        "p02-abi",
+        "p03-field",
+        "p04-tree-edit",
+        "m02-recovery"
+      ]
+    },
+    {
+      "features": "fts+exact+defn+kind+path+graph",
+      "candidate_recall": 0.8056,
+      "full_gold_rate": 0.7778,
+      "mean_candidates": 5.0,
+      "missed": [
+        "p02-abi",
+        "p03-field",
+        "p04-tree-edit",
+        "m02-recovery"
+      ]
+    }
+  ],
+  "limitations": [
+    "Python prototype over the same index; the C++ retriever is unchanged",
+    "candidate recall is not packed recall and not task success",
+    "18 hand-written tasks; feature sets are discrete and untuned, but the manifest is small enough that any ranking claim is provisional",
+    "tasks whose gold is lexically unreachable bound every row in this table"
+  ]
+}

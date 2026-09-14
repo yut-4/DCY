@@ -215,6 +215,102 @@ T_baseline = T_baseline_index_amortized + Σ_j(T_prefill(P_j)
 
 La fórmula `A(N/G)² + R(N)` sólo serviría bajo supuestos artificiales: particiones iguales y correctas, un único prefill por goal, sin tokens generados, sin instrucciones repetidas, sin cruces, sin costos fijos y con atención como cuello de botella. `R(N)` no es un escalar único: indexación inicial `Ω(bytes del corpus)`, actualización proporcional a archivos cambiados más dependencias invalidadas, consulta FTS según postings y grafo según nodos/aristas visitados, agregaciones globales potencialmente `Ω(N)`. Si `A` crece con `G`, la ventaja se erosiona. Prefijos compartidos/KV cache pueden abaratar baselines y DCY; medir configuración idéntica y tiempo real, no extrapolar FLOPs.
 
+### Índice experimental de eficiencia DCY
+
+DCY usa un modelo experimental de eficiencia para describir la relación entre contexto virtual direccionable, calidad del goal, utilidad de la base de datos y el tamaño del working set físico:
+
+```text
+E_DCY = (VT · C_g · D) / (N/G)²  =  (VT · C_g · D · G²) / N²
+```
+
+Donde:
+
+* `VT` — **Virtual Tokens**: contexto externamente direccionable representado por la imagen de contexto DCY actual bajo un tokenizador fijo.
+* `C_g` — **Goal Continuity / calidad del goal**: medida normalizada de cuánta información necesaria para continuar la tarea preserva el goal actual.
+* `D` — **Utilidad efectiva de la base de datos**: medida normalizada de cuánta evidencia útil recupera la base para la tarea. No se usa el tamaño de la base, porque una base mayor no implica mejor recuperación.
+* `N` — tamaño total de contexto/corpus considerado en el experimento.
+* `G` — número de particiones efectivas o regiones direccionables por goal.
+* `N/G` — tamaño idealizado del working set físico.
+
+El denominador `(N/G)²` es sólo un proxy idealizado del componente cuadrático de atención de un transformer denso sobre un working set. **No** es un modelo completo de complejidad en ejecución: la ejecución real incluye proyecciones/MLP, decodificación, comportamiento del KV cache, retrieval, rendering, I/O, llamadas repetidas al modelo y efectos de hardware, tal como detalla el resto de esta sección. La ecuación se trata por tanto como **índice experimental de eficiencia DCY**, no como prueba de que DCY cambie la complejidad del transformer de `O(N²)` a otra clase asintótica.
+
+Una implementación práctica puede definir:
+
+```text
+D = Recall@B
+```
+
+o, más adelante:
+
+```text
+D = Recall@B · EvidencePrecision@B · Freshness
+```
+
+con cada componente normalizado a `[0,1]`.
+
+`Recall@B` debe medirse **después del empaquetado**, no a la salida del recuperador. Son cantidades distintas y su diferencia es el primer fallo observado en la implementación de referencia:
+
+```text
+Recall_candidate  evidencia gold producida por el recuperador con presupuesto efectivamente ilimitado
+Recall_injected   evidencia gold que sobrevive al distiller bajo el presupuesto real B
+Recall_answered   evidencia gold que el modelo utiliza en su respuesta
+```
+
+Usar `Recall_candidate` como `D` sobreestima `E_DCY` exactamente en la fracción de evidencia que el packer descarta. `C_g` también debe medirse operativamente y no asumirse: preservación de hechos requeridos entre goals, tasa de goals completados, o fracción de evidencia prerrequisito todavía recuperable en el paso siguiente.
+
+Esa distinción separa dos índices. Para medir el **runtime/gestor de contexto**:
+
+```text
+E_DCY_core = (VT · C_g · D_packed) / (N/G)²      con   D_packed = Recall_injected
+```
+
+Pero evidencia inyectada no es evidencia usada. En el piloto de atribución, el 0.5B recibió el símbolo gold en el prompt y respondió con el identificador de entidad en vez del nombre de la función, porque el renderer anteponía `E187` a cada línea. Eso no es un fallo de retención sino de **usabilidad representacional**, y no lo captura ningún término anterior:
+
+```text
+EvidencePresent  ⇏  EvidenceUsable
+```
+
+Por tanto el sistema extremo a extremo necesita un factor adicional:
+
+```text
+E_DCY_e2e = E_DCY_core · U_{M,R}
+```
+
+donde `M` es el modelo, `R` el renderer ORMT, y `U_{M,R} = P(gold usado correctamente | gold inyectado)` es una propiedad medida del **par** modelo/representación, no de ninguno por separado. En la implementación de referencia, cambiar sólo el renderer a name-first movió `U` de 0.222 a 0.818 con el mismo modelo y el mismo `D_packed`. Un `E_DCY` que sólo multiplique recall habría declarado idénticas ambas configuraciones.
+
+Las cuatro cantidades a instrumentar son entonces:
+
+```text
+R_c = Recall_candidate   salida del recuperador, presupuesto ilimitado
+R_i = Recall_injected    lo que sobrevive al packer bajo el presupuesto real
+U   = P(gold usado | gold inyectado)
+S   = TaskSuccess
+```
+
+`R_c → R_i` mide la interfaz retrieval→packing; `U` mide la interfaz packing→ORMT/modelo. Reportar sólo `S` confunde ambas con incapacidad del modelo.
+
+Como cocientes, esas interfaces son **eficiencias de propagación** y localizan dónde desaparece la señal:
+
+```text
+eta_pack     = R_i / R_c        retriever  -> distiller
+eta_use      = R_a / R_i        distiller  -> ORMT + modelo
+eta_pipeline = R_a / R_c        = eta_pack · eta_use
+```
+
+```text
+Retriever         candidatos
+    ↓ eta_pack
+Distiller         evidencia inyectada
+    ↓ eta_use
+ORMT + modelo     evidencia usada
+    ↓
+Respuesta
+```
+
+En la implementación de referencia, corregir sólo packer y renderer movió `eta_pipeline` de 0.143 a 0.643 **sin cambiar `R_c`**: toda la ganancia fue propagación, no recuperación. Un experimento que sólo reporte éxito final no puede distinguir ese caso de una mejora del recuperador, y ahí es donde `E_DCY` se vuelve inauditable. Los checkpoints congelados en `bench/checkpoints/` registran las tres eficiencias junto con digests SHA-256 de las fuentes que las produjeron.
+
+La hipótesis central de DCY no es que información arbitraria pueda comprimirse sin pérdida. Es que, para tareas suficientemente locales, `RelevantInformation(G) ≪ N`, y por tanto una base construida dinámicamente y un working set específico del goal pueden permitir a un modelo operar sobre un contexto **direccionable** mucho mayor manteniendo acotado su prompt físico.
+
 ## 9. Benchmark reproducible y ablations
 
 La unidad es tarea en snapshot inmóvil, con gold de spans necesarios y test/criterio de éxito. Estratos: localización de hecho, reparación local de 1–2 archivos, multi-hop 3–5 archivos, cambio global, fallo del parser/reflectivo y perturbaciones de nombres (mismo significado, poca coincidencia léxica). 100k, 1M y 5M+ tokens son **tamaño de corpus bajo un tokenizador fijado**, no todos los repositorios/tareas de SWE-bench tienen esos tamaños. Construir dos colecciones: issues reales con tests ocultos y repos sintéticos controlados con distractores, para aislar escalabilidad. Los casos sintéticos no bastan para afirmar utilidad real. Los issues reales deben fijar commit anterior al arreglo, excluir el patch y pruebas ocultas del índice, y auditar contaminación. [SWE-bench](https://github.com/swe-bench/SWE-bench/blob/main/README.md) es punto de partida, no benchmark único; OpenAI ha cuestionado recientemente la capacidad de SWE-bench Verified para diferenciar sistemas frontera, por defectos de pruebas y contaminación. [Evaluación crítica](https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/).

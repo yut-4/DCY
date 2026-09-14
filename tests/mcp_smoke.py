@@ -48,13 +48,13 @@ def main():
             view = call(process, 3, "dcy_view", {"goal": "Find login authentication", "max_bytes": 512})
             assert not view.get("isError")
             assert len(view["content"][0]["text"].encode()) <= 512
-            assert "E" in view["content"][0]["text"]
+            assert "[ref=E" in view["content"][0]["text"]
             assert "view" not in view["structuredContent"]  # no duplicate payload
             goal_id = view["structuredContent"]["goal_id"]
             generation = view["structuredContent"]["generation"]
             too_big = call(process, 4, "dcy_view", {"goal": "login", "max_bytes": 513})
             assert too_big["isError"]
-            match = re.search(r"(?m)^E(\d+) ", view["content"][0]["text"])
+            match = re.search(r"\[ref=E(\d+)\]", view["content"][0]["text"])
             assert match
             entity = int(match.group(1))
             source = call(process, 5, "dcy_source", {"entity_id": entity, "generation": generation,

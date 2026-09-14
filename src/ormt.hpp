@@ -33,8 +33,17 @@ inline std::string relation_text(const Entity& e, size_t limit) {
   return out;
 }
 
+// Renderings are name-first. An entity ID placed at the start of every line is
+// a visually privileged token that also looks like a valid answer, and small
+// models copy it instead of the symbol name. The name carries the semantics;
+// the ID is routing metadata for `dcy source`, so it is rendered as a trailing
+// [ref=E<id>] tag. Hosts parse the tag, not the line prefix.
+inline std::string reference(const Entity& e) {
+  return "[ref=E"+std::to_string(e.id)+"]";
+}
+
 inline std::string detailed(const Entity& e) {
-  std::string line="E"+std::to_string(e.id)+" "+e.kind+" "+e.name+"\n  source="+e.path+":"+
+  std::string line=e.kind+" "+e.name+" "+reference(e)+"\n  source="+e.path+":"+
     std::to_string(e.start)+"-"+std::to_string(e.end)+" sha="+e.sha256.substr(0,12)+
     " score="+std::to_string(e.score);
   if (!e.relations.empty()) line+="\n  relations="+relation_text(e,4);
@@ -42,14 +51,14 @@ inline std::string detailed(const Entity& e) {
 }
 
 inline std::string compact(const Entity& e) {
-  std::string line="E"+std::to_string(e.id)+" "+e.name+" @"+e.path+":"+
-    std::to_string(e.start)+"-"+std::to_string(e.end);
+  std::string line=e.name+" @"+e.path+":"+
+    std::to_string(e.start)+"-"+std::to_string(e.end)+" "+reference(e);
   if (!e.relations.empty()) line+=" >"+relation_text(e,2);
   return line+"\n";
 }
 
 inline std::string minimal(const Entity& e) {
-  return "E"+std::to_string(e.id)+" "+e.name+"\n";
+  return e.name+" "+reference(e)+"\n";
 }
 
 inline std::string header(const std::string& generation,const std::string& goal) {

@@ -12,7 +12,7 @@ string(REGEX MATCH "generation ([0-9a-f]+)" ignored "${first}")
 set(OLD_GENERATION "${CMAKE_MATCH_1}")
 execute_process(COMMAND "${DCY}" query "${DB}" "login" 500
   RESULT_VARIABLE rc OUTPUT_VARIABLE context ERROR_VARIABLE err)
-string(REGEX MATCH "E([0-9]+) function login" ignored "${context}")
+string(REGEX MATCH "function login \\[ref=E([0-9]+)\\]" ignored "${context}")
 set(OLD_ENTITY "${CMAKE_MATCH_1}")
 if(NOT rc EQUAL 0 OR OLD_ENTITY STREQUAL "")
   message(FATAL_ERROR "query failed: ${context} ${err}")

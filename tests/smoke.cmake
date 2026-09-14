@@ -31,22 +31,30 @@ string(LENGTH "${context}" context_bytes)
 if(context_bytes GREATER 500)
   message(FATAL_ERROR "ORMT budget exceeded: ${context_bytes}")
 endif()
-execute_process(COMMAND "${DCY}" query "${DB}" "login" 150
+execute_process(COMMAND "${DCY}" query "${DB}" "login" 200
   RESULT_VARIABLE rc OUTPUT_VARIABLE compact ERROR_VARIABLE err)
-if(NOT rc EQUAL 0 OR NOT compact MATCHES "E[0-9]+ login @auth.cpp")
+if(NOT rc EQUAL 0 OR NOT compact MATCHES "login @auth.cpp:[0-9]+-[0-9]+ \\[ref=E[0-9]+\\]")
   message(FATAL_ERROR "ORMT compact fallback failed: ${compact} ${err}")
 endif()
-execute_process(COMMAND "${DCY}" query "${DB}" "login" 115
+execute_process(COMMAND "${DCY}" query "${DB}" "login" 130
   RESULT_VARIABLE rc OUTPUT_VARIABLE minimal ERROR_VARIABLE err)
-if(NOT rc EQUAL 0 OR NOT minimal MATCHES "E[0-9]+ login" OR minimal MATCHES "@auth.cpp")
+if(NOT rc EQUAL 0 OR NOT minimal MATCHES "login \\[ref=E[0-9]+\\]" OR minimal MATCHES "@auth.cpp")
   message(FATAL_ERROR "ORMT minimal fallback failed: ${minimal} ${err}")
 endif()
+# Entity IDs are routing metadata and must never lead a rendered line, at any level.
+foreach(probe 500 200 130)
+  execute_process(COMMAND "${DCY}" query "${DB}" "login" "${probe}"
+    RESULT_VARIABLE rc OUTPUT_VARIABLE rendered ERROR_VARIABLE err)
+  if(NOT rc EQUAL 0 OR rendered MATCHES "\n *E[0-9]+ ")
+    message(FATAL_ERROR "entity ID leads a line at budget ${probe}: ${rendered} ${err}")
+  endif()
+endforeach()
 execute_process(COMMAND "${DCY}" query "${DB}" "login" 80
   RESULT_VARIABLE rc ERROR_VARIABLE err)
 if(rc EQUAL 0 OR NOT err MATCHES "budget too small")
   message(FATAL_ERROR "ORMT accepted impossible budget: ${rc} ${err}")
 endif()
-string(REGEX MATCH "E([0-9]+) function login" ignored "${context}")
+string(REGEX MATCH "function login \\[ref=E([0-9]+)\\]" ignored "${context}")
 set(ENTITY "${CMAKE_MATCH_1}")
 if(ENTITY STREQUAL "")
   message(FATAL_ERROR "login entity missing: ${context}")

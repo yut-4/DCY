@@ -63,7 +63,7 @@ def main():
                     rendered, latency_ms = run(
                         [str(args.dcy), mode, str(args.db), goal, str(budget)]
                     )
-                    emitted = {names[int(i)] for i in re.findall(r"^E(\d+)\b", rendered, re.M)}
+                    emitted = {names[int(i)] for i in re.findall(r"\[ref=E(\d+)\]", rendered)}
                     hits = gold & emitted
                     records.append({
                         "task": task["id"], "mode": mode, "budget_bytes": budget,

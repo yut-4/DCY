@@ -1,0 +1,79 @@
+{
+  "checkpoint": "E1",
+  "note": "coverage-first packing + name-first ORMT",
+  "tests": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4
+  },
+  "current": {
+    "source": "build/oracle-after.json",
+    "tasks": 9,
+    "model": "qwen2.5:0.5b-instruct",
+    "condition": "dcy",
+    "candidate_recall": 0.7778,
+    "injected_recall": 0.6111,
+    "answer_recall": 0.5,
+    "exact_rate": 0.0,
+    "U_model_renderer": 0.8182,
+    "eta_pack": 0.7857,
+    "eta_use": 0.8182,
+    "eta_pipeline": 0.6429,
+    "entity_id_copies": 0,
+    "attribution": {
+      "retrieval": 2,
+      "packing": 2,
+      "representation": 1,
+      "correct": 4
+    }
+  },
+  "digests_sha256": {
+    "CMakeLists.txt": "ff4425abf61ed57af53f65d4bb478a07c2fa218a6947cee28d7d6bfe49dd31cd",
+    "src/main.cpp": "ef95de943147ea8bdab1ab6019a31085572d6f8357615d959d442254fd9c27e7",
+    "src/distiller.hpp": "55c51dc8697342a83188e07a81686198346461842d03b6077879e698e2b6f041",
+    "src/ormt.hpp": "f832edfb70912d68ba6f5e1f0f3d84dcb833d73e8e96e48ee665824313273f45",
+    "src/mlpack_retrieval.hpp": "3426ed037c53eb13afaf767ac8f84d1981ac4cc1437dd305744508bd301be10d",
+    "mcp/dcy_mcp.py": "9e3ebf0cb1769b67a8536fdc50e34c7173e875b615ee432bc55d8b2eab7164b0",
+    "bench/oracle.py": "d4543b4e113cf74b2b6657a9e6ae16b840aceb1cf1f9d51708601b8941f4a66d",
+    "bench/retrieval.py": "cc54f2fdd534aaa5b5ef7fe6c3996fc3b8236d370a519d9076cdee8d323d7ad0",
+    "bench/llm_identification.py": "0d78f28497ff6f758f976911190c2926b573f5421c8f070adcc146271c9cb433",
+    "bench/tree-sitter-lib-tasks.jsonl": "537b154074624d206bd8cb7533b3efb50de502d1ec95cda8ee1853c12032f101",
+    "bench/fixture-tasks.jsonl": "98fec20d6ac2df38245ec019bac4dee31117bf6b99370daa48d0b8bf0eff54c5",
+    "tests/distiller_test.cpp": "8c27a0786fb4b407e4e1c30c697f4d4d29c1e672b1ff20aadf23fdb3f5e08356",
+    "tests/smoke.cmake": "b8e7e80d863c129f791a7a1a047fba77a8d08032b48d72e73cbd5a4fd4722f45",
+    "tests/invalidation.cmake": "baad2a790afa4cc73b49c4e3fab0a5dc76f0f06ecbf6602f92a2cd9324926f54",
+    "tests/mcp_smoke.py": "d31fb78345c6c8e4dc73790536c2c0e9b2cca42239b75a88b7e7d31b701cf1f8"
+  },
+  "baseline_id": "E0",
+  "baseline": {
+    "source": "build/oracle.json",
+    "tasks": 9,
+    "model": "qwen2.5:0.5b-instruct",
+    "condition": "dcy",
+    "candidate_recall": 0.7778,
+    "injected_recall": 0.5,
+    "answer_recall": 0.1111,
+    "exact_rate": 0.0,
+    "U_model_renderer": 0.2222,
+    "eta_pack": 0.6429,
+    "eta_use": 0.2222,
+    "eta_pipeline": 0.1429,
+    "entity_id_copies": 7,
+    "attribution": {
+      "retrieval": 2,
+      "packing": 3,
+      "representation": 3,
+      "correct": 1
+    }
+  },
+  "delta": {
+    "candidate_recall": 0.0,
+    "injected_recall": 0.1111,
+    "answer_recall": 0.3889,
+    "U_model_renderer": 0.596,
+    "eta_pack": 0.1428,
+    "eta_use": 0.596,
+    "eta_pipeline": 0.5,
+    "entity_id_copies": -7
+  }
+}
