@@ -37,4 +37,9 @@ add_test(NAME dcy_invalidation COMMAND ${CMAKE_COMMAND} -DDCY=$<TARGET_FILE:dcy>
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
   add_test(NAME dcy_mcp_smoke COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/mcp_smoke.py $<TARGET_FILE:dcy>)
+  # Scoring logic for the architecture benchmark. Pure Python, no LLM and no
+  # network: it guards the metric definitions (R_c vs R_a separation,
+  # hallucination accounting, absent-symbol abstention) that decide whether a
+  # published benchmark number means what it claims.
+  add_test(NAME dcy_arch_scoring COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/arch_scoring_test.py)
 endif()

@@ -546,6 +546,30 @@ None of `estimate_value`, `budget_exhausted`, or the individual ratio functions 
 
 E6.2-A itself — the actual comparison of `Random`, `Fixed`, `immediate relevance`, `marginal obligation coverage`, and `Q_DCY` at `h=1,2,3` with and without `\widehat V`, on real DCY tasks, reporting `Success@Budget`, `NodesExpanded`, planner wall time, and a `PlanningEfficiency = Success@Budget / NodesExpanded` engineering metric — has not been run. It is the next concrete step, not a result to report yet.
 
+### E7 — Paging architecture vs flat retrieval on a small model — virtualization claim not supported
+
+E7 tests the semantic-paging claim of the next section directly: does DCY-driven navigation under a small window beat a single flat retrieval of comparable size, on the same model and the same tasks? The headline comparison is `static-512` vs `dcy-v2`, chosen because both begin from a small physical window and differ only in whether the runtime may page. `qwen3:0.6b` at `temperature=0`, `num_ctx=8192`, 12 scored tasks plus two controls, over `corpus-1m.sqlite` (redis, jemalloc, tree-sitter). Every gold symbol in `bench/arch-suite-tasks.jsonl` was validated against the index before the run; two proposed entries were dropped because they are macros rather than indexed entities. All five architectures share one plain-text reader prompt — no JSON contract — so no arm is penalized for protocol compliance rather than task ability. Harness `bench/arch_comparison.py`, aggregation `bench/arch_report.py`, artifact `build/arch-qwen3-0.6b.json` (70 records).
+
+| Architecture | `R_c` | `R_a` | Precision | `F1` | Hallucinated/task | Median PT | Median s | LLM calls | Solved |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `base` (no context) | 0.000 | 0.250 | 0.103 | 0.135 | 1.75 | 74 | 15.1 | 1 | 2/12 |
+| `static-512` | 0.625 | 0.583 | 0.360 | 0.390 | 0.58 | 301 | 16.3 | 1 | 6/12 |
+| `static-2048` | 0.792 | 0.597 | 0.396 | 0.432 | 0.25 | 955 | 30.1 | 1 | 6/12 |
+| `dcy-v2` | 0.667 | 0.583 | 0.409 | 0.432 | **0.00** | 2342 | 78.2 | 5 | 6/12 |
+| `oracle` | 1.000 | 0.875 | 0.872 | 0.868 | 0.08 | 1512 | 37.3 | 1 | 9/12 |
+
+`oracle` is a ceiling instrument, not a competing system: it injects the source of the task's own gold symbols and therefore has `R_c = 1.000` by construction. It is present only to separate "the retriever did not supply the evidence" from "the model could not use it", and must never be read as a retrieval result.
+
+Two budget questions are reported separately because they are distinct claims. At **equal total physical tokens** (`static-2048` vs `dcy-v2`) the difference in answer recall is `-0.014`, within noise and in the wrong direction. At **equal instantaneous window** (`static-512` vs `dcy-v2`) it is exactly `+0.000`, with `dcy-v2` consuming 7.8× the prompt tokens and 4.8× the wall time to reach the same six solved tasks. `H_E7` — that structured navigation under a bounded window outperforms flat retrieval of that window size — is **not supported by this benchmark**. This is recorded as a negative result; the paging runtime remains implemented and correct, but its measured advantage on this suite is confined to precision rather than capability.
+
+The signal split localizes the loss. `eta_use = R_a / R_c` is 0.93, 0.75 and 0.87 for `static-512`, `static-2048` and `dcy-v2` respectively, so the 0.6B model converts nearly all evidence it is shown into named entities and is not the binding constraint; the ceiling is `R_c`, where `dcy-v2` (0.667) improves only marginally on a single 512-byte query (0.625) and stays below a single 2048-byte query (0.792). By tier the gap is starkest on the hard multi-hop jemalloc tasks, exactly where navigation was expected to pay: `dcy-v2` reaches `R_a = 0.1` against `oracle` at `0.8`, and on T12 all four retrieval arms record `R_c = 0.000` while `oracle` records `1.000`. The model can answer these questions; the ranking is not supplying the evidence. The one unambiguous `dcy-v2` win is **zero** hallucinated symbols per task against 1.75 for the no-context arm and 0.58 for `static-512` — carry-state paging suppresses invention even where it does not raise capability.
+
+Two controls constrain the interpretation. N01 probes a symbol confirmed absent from the index (`ts_subtree_quantum_edit`); all five architectures fabricate a role for it, `oracle` included, and none abstains — so none of these numbers should be read as evidence of calibrated refusal. P01 is a lexical paraphrase of T02 naming no symbols; every retrieval arm falls from `R_a` of 0.667–1.000 to **0.000** while `oracle` holds at 1.000, indicating candidate generation keys on literal identifier overlap with the query rather than on semantic intent. That mechanism is the most plausible explanation for the depressed `R_c` on the hard tier, and it makes ranking — not paging strategy, budget policy, or model size — the next subsystem to measure.
+
+**Two harness bugs were found and fixed during E7, both of the silent kind that inflates a result rather than crashing.** First, Ollama honours a default `num_ctx` of 4096 regardless of the model's advertised context (`qwen3:0.6b` reports 40960), so a long-context arm can score against a prompt the model never received; the tell was a 16 kB and a 64 kB dump arm both reporting exactly 2050 prompt tokens. Both harnesses now set `num_ctx` explicitly and flag any row where `prompt_eval_count >= num_ctx - 8`. Second, the N01 abstention detector originally matched hedge keywords as substrings and scored `The role of X is not explicitly defined... However, it is referenced in hpa_try_alloc_one_no_grow, check_match` as a clean refusal, publishing "3 of 5 abstained" when all five had fabricated; abstention now requires the hedge **and** no asserted role **and** zero invented symbols, with all three sub-flags recorded. Both are covered by regression tests in `tests/arch_scoring_test.py` (CTest target `dcy_arch_scoring`), the first using the verbatim model output that defeated the original rule, together with an assertion that the superseded rule would indeed have passed it — so the test cannot quietly stop being a regression.
+
+A separate naming hazard is worth recording because it caused a result to be read backwards in review. `bench/long_context_vs_dcy.py` compares raw source dumps against a **single** `dcy query` plus one inference, and that arm was originally called plain `dcy`; it is flat retrieval and is now named `dcy-query-<budget>`. Its 1.4× speed and 4.3× token advantage over a 4 kB raw dump is a real result about DCY's distillation, and says nothing about the v2 paging runtime, which issues roughly five inferences and is the slowest arm in the table above. The C++ retrieval itself costs 0.02–0.1 s throughout; the cost in `dcy-v2` is LLM calls, not DCY.
+
 ## Design principle — semantic paging
 
 > **DCY virtualizes context by repeatedly materializing distilled regions of a larger externally addressable token space while preserving task state across windows.**
@@ -607,6 +631,28 @@ The difference is that each distilled window becomes part of the cognitive conti
 | Receding-horizon loop | `run_paging_runtime()` in `api/dcy_consumer.py`: materialize page → LLM observes → `dcy record` → `SeenSet` update → cut → distill capsule → advance sub-goal → final synthesis | Ready runtime (deterministic goals; full `plan(h) → act → replan` with learned policies is still E6.2-A) |
 
 The remaining gap is E6.2-A measurement, not missing runtime code: the paging loop runs today (`python3 api/dcy_consumer.py --dcy build/dcy --db build/corpus-1m.sqlite --task "..." --budget 512 --max-goals 4 --stub`), the planner primitives are tested, but no run yet proves which selector/horizon/`tau`/V-hat level improves `Success@Budget` over the baselines. That comparison is the next concrete step.
+
+### Runtime HTTP API — Ollama consumes DCY through here
+
+`api/dcy_server.py` exposes the v2 paging runtime over HTTP (stdlib only, no web framework), so any model client — Ollama, Hermes, curl — consumes virtualized context without knowing DCY exists:
+
+```text
+POST /session          {"budget":512,"max_goals":4,"model":"qwen2.5:0.5b-instruct"} -> {"session":"1",...}
+POST /chat             {"session":"1","message":"what functions handle tree edit propagation?"} -> {"answer":"...","usage":{...}}
+GET  /session/{id}     -> config + chat history
+DELETE /session/{id}   -> removes the session
+GET  /health           -> {"ok":true}
+```
+
+Run it with:
+
+```sh
+python3 api/dcy_server.py --db build/corpus-1m.sqlite --port 8765
+```
+
+Verified live against local Ollama (this repo's own test run, not a claim): `qwen2.5:0.5b-instruct` answered "what functions handle tree edit propagation?" through `POST /chat` with `ts_tree_edit`, `unmarshal_edit`, `ts_subtree_edit`, `ts_range_edit` grounded in 14 unique entities over 2 goals and 993 physical bytes. A second chat on the same session, session history (`history_n: 2`), delete + unknown-session-after-delete all verified in the same run.
+
+Two honest notes from that live run: (1) it caught a real bug — a cross-run goal cache handed back finished goal_ids (`dcy: goal is not active`), so `DCYCli.create_goal` now always creates fresh goals; repeat CLI runs are byte-identical after the fix (2 pages, 993 PT, 14 uniq, twice in a row). (2) On mixed-corpus queries the retriever can blend subsystems (a "callers of ts_subtree_edit" answer mentioned jemalloc's `large_ralloc`), which is retrieval behavior, not API behavior — recorded here so it is not mistaken for a clean result.
 
 The first E5 run exposed and fixed a harness boundary: `dcy source` correctly rejected a gold span larger than the verifier's initial 4 KiB limit. The rerun uses an explicit 1 MiB benchmark limit and records the original failure rather than hiding it.
 
@@ -705,7 +751,24 @@ python3 bench/retrieval.py --dcy build/dcy --repo tests/fixture \
 
 The JSON output records index time, per-query CLI latency, context bytes, and gold-symbol recall. This is a retrieval ablation, **not** an LLM task-success benchmark. `query-fts` excludes graph expansion; `query` includes it. Add `query-mlpack` to `--modes` only in an mlpack-enabled build. The fixture tasks are a pipeline check, not evidence that DCY beats another method.
 
-The [2026-09-14 exploratory results](bench/results-2026-09-14.md) include the full ablations, raw checkpoint artifacts, and scale pilots. The current experimental checkpoint is **E1**: coverage-first packing and name-first ORMT changed injected recall from 0.500 to 0.611, answer recall from 0.111 to 0.500, and `U(model,renderer)` from 0.222 to 0.818 on the same nine-task 0.5B pilot; candidate recall stayed at 0.778, so the gain came from propagation rather than retrieval. `ctest` passes 4/4. E1 artifacts are under `bench/checkpoints/`.
+The [2026-09-14 exploratory results](bench/results-2026-09-14.md) include the full ablations, raw checkpoint artifacts, and scale pilots. The current experimental checkpoint is **E1**: coverage-first packing and name-first ORMT changed injected recall from 0.500 to 0.611, answer recall from 0.111 to 0.500, and `U(model,renderer)` from 0.222 to 0.818 on the same nine-task 0.5B pilot; candidate recall stayed at 0.778, so the gain came from propagation rather than retrieval. `ctest` passes 6/6. E1 artifacts are under `bench/checkpoints/`.
+
+## Architecture comparison benchmark (E7)
+
+Compares `base`, `static-512`, `static-2048`, `dcy-v2` and `oracle` on one model, scoring entities rather than a bare correct/incorrect, and separating evidence recall `R_c` from answer recall `R_a`:
+
+```sh
+python3 bench/arch_comparison.py --model qwen3:0.6b \
+  --db build/corpus-1m.sqlite --tasks bench/arch-suite-tasks.jsonl \
+  --out build/arch-qwen3-0.6b.json
+python3 bench/arch_report.py build/arch-qwen3-0.6b.json
+```
+
+Requires `httpx` and a running Ollama. Roughly 2.5 minutes per task on CPU for a 0.6B model — run it in the background; records are appended to the artifact after every arm, so a timeout loses at most one row. `--only T01 T02` restricts the task set and `--architectures static-512 dcy-v2` restricts the arms.
+
+Two auxiliary A/B harnesses: `bench/ab_dcy_vs_nodcy.py` (with-context vs no-context on the same model, reporting gold-in-page, consumption and correctness separately) and `bench/long_context_vs_dcy.py` (raw source dumps of increasing size vs a single distilled query — set `--num-ctx` above the largest dump or Ollama silently truncates and the arm measures nothing).
+
+The scoring logic these three share is covered by `tests/arch_scoring_test.py`, which runs under `ctest -R dcy_arch_scoring` without Ollama, a database, or network access. Read `E7` above before quoting any number from these harnesses: the headline result is negative, and `oracle` is a ceiling instrument rather than a competing retrieval system.
 
 ## 1M virtual tokens / 500-token model context
 

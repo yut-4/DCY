@@ -159,9 +159,14 @@ class DCYCli:
         return result.stdout.decode("utf-8")
 
     def create_goal(self, goal_text: str) -> tuple[int, str]:
-        """Create a goal and return (goal_id, generation)."""
-        if goal_text in self._goal_cache:
-            return self._goal_cache[goal_text]
+        """Create a fresh goal and return (goal_id, generation).
+
+        Always creates — never reuses a cached goal. Goals get finished
+        (`resolved`) at the end of each sub-goal, and `dcy context` refuses
+        finished goals ("goal is not active"), so a cross-run cache would
+        hand back dead goal_ids. Fresh goals cost one extra `dcy goal`
+        call per sub-goal; correctness first.
+        """
         created = self._cli("goal", self.db, goal_text).strip()
         goal_id = int(created.split()[0][1:])
         generation = created.split("generation=", 1)[1]

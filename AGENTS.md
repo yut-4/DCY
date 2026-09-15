@@ -6,7 +6,7 @@ This repository is a C++20 MVP of DCY, which builds a SQLite/FTS5 index of C/C++
 
 ## Build, Test, and Development Commands
 
-Run `cmake -S . -B build`, then `cmake --build build`. The build needs SQLite3, OpenSSL, and libclang development files. Run both CTest checks with `ctest --test-dir build --output-on-failure`; run only the source and indexing smoke check with `ctest --test-dir build -R dcy_smoke --output-on-failure`. The retrieval-only pilot is `python3 bench/retrieval.py --dcy build/dcy --repo tests/fixture --db build/retrieval-pilot.sqlite --tasks bench/fixture-tasks.jsonl`. Its gold-symbol recall is not task success. Enable optional mlpack only with `-DDCY_ENABLE_MLPACK=ON` and its dependencies installed.
+Run `cmake -S . -B build`, then `cmake --build build`. The build needs SQLite3, OpenSSL, and libclang development files. Run all CTest checks with `ctest --test-dir build --output-on-failure`; run only the source and indexing smoke check with `ctest --test-dir build -R dcy_smoke --output-on-failure`. The benchmark scoring logic has its own dependency-free check, `ctest --test-dir build -R dcy_arch_scoring --output-on-failure`, which needs no Ollama, database, or network. The retrieval-only pilot is `python3 bench/retrieval.py --dcy build/dcy --repo tests/fixture --db build/retrieval-pilot.sqlite --tasks bench/fixture-tasks.jsonl`. Its gold-symbol recall is not task success. Enable optional mlpack only with `-DDCY_ENABLE_MLPACK=ON` and its dependencies installed.
 
 ## Agent Context Workflow
 
