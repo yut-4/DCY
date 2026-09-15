@@ -70,6 +70,25 @@ def task_audit(rows, score_key):
     }
 
 
+def focused_baseline(rows):
+    groups = {}
+    for row in rows:
+        groups.setdefault(row["task"], []).append(row)
+    focused, observed_best = [], []
+    for candidates in groups.values():
+        focused.append(next(row for row in candidates if row["route"] == "focused"))
+        observed_best.append(max(row["observed_utility"] for row in candidates))
+    return {
+        "tasks": len(focused),
+        "successes": sum(row["success"] for row in focused),
+        "success_rate": sum(row["success"] for row in focused) / len(focused) if focused else None,
+        "mean_observed_utility": statistics.mean(row["observed_utility"] for row in focused) if focused else None,
+        "agreement_with_observed_best": sum(
+            row["observed_utility"] == best for row, best in zip(focused, observed_best)
+        ) / len(focused) if focused else None,
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--e5", type=Path, required=True)
@@ -85,8 +104,17 @@ def main():
     routes_per_task = Counter(len(value) for value in groups.values())
     forbidden_future_fields = {"success", "observed_utility"}
     prospective_fields = {"sigma", "average", "cost", "measurements", "random_score"}
+    score_inputs = set()
+    for row in rows:
+        score_inputs.update(row.keys() & prospective_fields)
+    leaked_fields = sorted(score_inputs & forbidden_future_fields)
+    score_source_audit = {
+        "score_fields_observed": sorted(score_inputs),
+        "evaluation_fields_observed": sorted(set().union(*(row.keys() for row in rows)) & forbidden_future_fields),
+        "leaked_evaluation_fields": leaked_fields,
+    }
     # Success is deliberately evaluated after execution; it must not be used by
-    # a future selector. This records its presence as evaluation-only metadata.
+    # a future selector. This is derived from the records, not a fixed verdict.
     audit = {
         "kind": "e6_0_e5_audit",
         "source": str(args.e5),
@@ -100,6 +128,11 @@ def main():
             "average": spearman([r["average"] for r in rows], [r["observed_utility"] for r in rows]),
             "cost": spearman([-r["cost"] for r in rows], [r["observed_utility"] for r in rows]),
         },
+        "always_focused_baseline": {
+            "all": focused_baseline(rows),
+            "design": focused_baseline([r for r in rows if r.get("split") == "design"]),
+            "held_out": focused_baseline([r for r in rows if r.get("split") == "held-out"]),
+        },
         "within_task": {
             "sigma": task_audit(rows, "sigma"),
             "average": task_audit(rows, "average"),
@@ -108,7 +141,8 @@ def main():
         "future_information_audit": {
             "evaluation_only_fields": sorted(forbidden_future_fields),
             "prospective_score_fields": sorted(prospective_fields),
-            "score_inputs_contain_evaluation_fields": False,
+            "score_source_audit": score_source_audit,
+            "score_inputs_contain_evaluation_fields": bool(leaked_fields),
         },
         "limitations": [
             "This audits retrospective E5 routes; it is not prospective planning",

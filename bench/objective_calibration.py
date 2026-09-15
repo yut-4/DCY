@@ -92,21 +92,52 @@ def route_score(row, metric, lam=0.0, ranges=None):
 
 
 def agreement(rows, metric, lam=0.0, ranges=None):
+    """Tie-safe route-choice agreement.
+
+    Python's max() breaks ties by returning the first maximal element in
+    iteration order; routes are always generated in the same fixed order
+    (focused, redundant, distracted, cheap-wrong, broad), so a naive
+    max()-based comparison systematically favors "focused" whenever scores
+    tie on either side. This computes the full set of tied winners on the
+    score side and on the observed-utility side and reports three distinct
+    numbers instead of collapsing them into one silently tie-biased figure:
+
+    strict_agreement: only counts a task when the metric has a single
+      undisputed winner and it matches an observed winner.
+    tie_aware_agreement: counts a task whenever any metric-tied winner
+      overlaps any observed-tied winner (credit, not proof of preference).
+    expected_agreement_random_tiebreak: the probability of matching if ties
+      on the metric side were broken uniformly at random.
+    """
     groups = {}
     for row in rows:
         groups.setdefault(row["task"], []).append(row)
-    matches = 0
+    strict_hits, tie_aware_hits, expected_hits = 0, 0, 0.0
     for candidates in groups.values():
-        chosen = max(candidates, key=lambda row: route_score(row, metric, lam, ranges))
-        observed = max(candidates, key=lambda row: row["observed_utility"])
-        matches += chosen["route"] == observed["route"]
-    return matches / len(groups)
+        scores = {row["route"]: route_score(row, metric, lam, ranges) for row in candidates}
+        best_score = max(scores.values())
+        winners = [route for route, s in scores.items() if abs(s - best_score) <= 1e-12]
+
+        utilities = {row["route"]: row["observed_utility"] for row in candidates}
+        best_utility = max(utilities.values())
+        observed_winners = {route for route, u in utilities.items() if abs(u - best_utility) <= 1e-12}
+
+        overlap = set(winners) & observed_winners
+        tie_aware_hits += bool(overlap)
+        strict_hits += 1 if (len(winners) == 1 and winners[0] in observed_winners) else 0
+        expected_hits += (len(overlap) / len(winners)) if winners else 0.0
+    n = len(groups)
+    return {
+        "strict_agreement": strict_hits / n,
+        "tie_aware_agreement": tie_aware_hits / n,
+        "expected_agreement_random_tiebreak": expected_hits / n,
+    }
 
 
 def evaluate(rows, metric, lam=0.0, ranges=None):
     xs = [route_score(row, metric, lam, ranges) for row in rows]
     ys = [row["observed_utility"] for row in rows]
-    return {"agreement": agreement(rows, metric, lam, ranges), "rho": spearman(xs, ys)}
+    return {**agreement(rows, metric, lam, ranges), "rho": spearman(xs, ys)}
 
 
 def main():
@@ -194,19 +225,21 @@ def main():
     cost_range = (min(r["cost"] for r in design), max(r["cost"] for r in design))
     ranges_design = sigma_range + cost_range
 
-    # Calibrate lambda only on design. Grid is declared before seeing results.
+    # Calibrate lambda only on design, using strict (tie-free) agreement so
+    # tie credit cannot silently inflate the chosen lambda. Grid is declared
+    # before seeing results.
     grid = [0.0, 0.0001, 0.00025, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0]
     candidates = []
     for lam in grid:
         result = evaluate(design, "J", lam)
-        candidates.append((result["agreement"], result["rho"], -lam, lam))
+        candidates.append((result["strict_agreement"], result["rho"], -lam, lam))
     _, _, _, best_lambda = max(candidates)
 
     # Normalized lambda is calibrated separately, still design-only.
     norm_candidates = []
     for lam in grid:
         result = evaluate(design, "J_norm", lam, ranges_design)
-        norm_candidates.append((result["agreement"], result["rho"], -lam, lam))
+        norm_candidates.append((result["strict_agreement"], result["rho"], -lam, lam))
     _, _, _, best_norm_lambda = max(norm_candidates)
 
     metrics = {
@@ -234,17 +267,23 @@ def main():
         "limitations": [
             "success is externally checked source/assertion coverage, not hidden test success" if args.external else "success is gold-evidence coverage, not hidden test success",
             "routes are deterministic generated controls, not planner proposals",
-            "lambda and normalization are selected on design only",
+            "lambda and normalization are selected on design only, using strict tie-free agreement",
             "fixture costs use prompt words and normalized latency, not billing units",
+            "C_goal and DB are computed from the task's gold set, and success is also computed from the same gold set: "
+            "sigma/E_DCY and success share a data source, so this rho/agreement is not evidence the metric predicts "
+            "success from independent signal, only that both are consistent functions of the same gold labels. "
+            "See E6.1 for observable-only features that do not read task['gold'].",
         ],
     }
     args.out.write_text(json.dumps(report, indent=2) + "\n")
     print(f"tasks={len(tasks)} trajectories={len(records)} design={len(design)} held-out={len(heldout)}")
     print(f"lambda={best_lambda} normalized_lambda={best_norm_lambda}")
-    print(f"{'metric':10s} {'design_agree':>13s} {'design_rho':>11s} {'held_agree':>12s} {'held_rho':>10s}")
+    print(f"{'metric':10s} {'design_strict':>13s} {'design_tie':>11s} {'design_rho':>11s} "
+          f"{'held_strict':>12s} {'held_tie':>9s} {'held_rho':>9s}")
     for metric, values in evaluations.items():
-        print(f"{metric:10s} {values['design']['agreement']:13.3f} {values['design']['rho']:11.4f} "
-              f"{values['held_out']['agreement']:12.3f} {values['held_out']['rho']:10.4f}")
+        d, h = values["design"], values["held_out"]
+        print(f"{metric:10s} {d['strict_agreement']:13.3f} {d['tie_aware_agreement']:11.3f} {d['rho']:11.4f} "
+              f"{h['strict_agreement']:12.3f} {h['tie_aware_agreement']:9.3f} {h['rho']:9.4f}")
 
 
 if __name__ == "__main__":

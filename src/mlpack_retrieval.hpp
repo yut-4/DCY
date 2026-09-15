@@ -50,7 +50,6 @@ inline std::vector<std::pair<long long,int>> nearest(
   for(size_t i=0;i<neighbors.n_rows;++i) {
     auto column=neighbors(i,0);
     if(column>=symbols.size()) continue;
-    // Unit vectors: squared distance > 1.6 is weak lexical evidence.
     if(distances(i,0)>1.6) continue;
     result.emplace_back(symbols[column].first,80-static_cast<int>(i)*2);
   }

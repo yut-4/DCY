@@ -350,20 +350,29 @@ best route agreement:            2/2
 
 This improves on the E2 diagnostic but remains a tiny fixture, not predictive validation. The external verifier changes the result: a route with distractor steps can still succeed if its final step retrieves all required evidence. E4 is therefore a methodology checkpoint showing that success can be measured outside the objective; it does not justify a planner yet. The next valid scale-up is 50–100 trajectories with independently verified tests or source assertions, then compare `EΣ`, `Ē`, ratio, additive `J`, normalized `J`, cost-only and random under a frozen design/held-out split.
 
-### E5 — External Objective Comparison
+### E5 — External Objective Comparison — retrospective benchmark later found to contain target leakage and tie-order bias
 
 E5 applies the external-success boundary to the larger objective comparison: 100 tasks, 500 deterministic trajectories, 300 design and 200 held-out. Each required symbol must be retrieved, resolved with `dcy source`, and pass an independently specified source assertion. `λ` and normalization are selected on design only.
 
-| Metric | Design agreement | Design ρ | Held-out agreement | Held-out ρ |
-|---|---:|---:|---:|---:|
-| `E_DCY^Σ` | 0.233 | 0.8313 | 0.175 | 0.8032 |
-| `Ē_DCY` | **1.000** | 0.8732 | **0.975** | **0.8827** |
-| `-Cost` | 0.067 | -0.1037 | 0.150 | 0.0018 |
-| `J_DCY` | 0.633 | 0.1875 | 0.725 | 0.2691 |
-| `J_norm` | 0.733 | 0.4706 | 0.675 | 0.5288 |
-| `Random` | 0.250 | -0.0116 | 0.125 | 0.0313 |
+**Two bugs were found in `bench/objective_calibration.py` after the fact, confirmed against the code and re-run, not assumed:**
 
-`H_E5` is supported on this benchmark: `Ē_DCY` ranks externally validated trajectories better than `EΣ`, cost-only, additive `J`, normalized `J`, and random. Held-out `ρ=0.8827` and 0.975 route-choice agreement are strong for this fixture, but not universal validation: the tasks are generated, the source assertions are mechanical name/body checks rather than hidden tests, and all routes share the same cost proxy. The practical result is a constraint-first direction — require external correctness for evaluation, then compare efficiency among valid routes — rather than wiring the current `J_DCY` into a planner.
+1. **Target leakage.** `C_goal` and `DB` are computed as `relevant/selected` and `relevant/required` where `relevant = selected ∩ task["gold"]` (`objective_calibration.py:138,153-156`), and `success` is computed from the same `task["gold"]` set (`union >= required`, line 167). `sigma`/`Ē_DCY` and `success` are therefore both direct functions of the same gold labels, not independent signals — a high correlation between them is partly tautological and does not show the metric predicts success from information a planner would actually have at decision time.
+2. **Tie-order bias.** `agreement()` originally used Python's `max(candidates, key=...)`, which returns the first maximal element in iteration order. Routes are always generated in the fixed order `focused, redundant, distracted, cheap-wrong, broad`, so ties on either the score side or the observed-utility side were silently resolved in favor of `focused` every time. This has been fixed: `agreement()` now reports three separate numbers — `strict_agreement` (single undisputed winner matches), `tie_aware_agreement` (any tied winner overlaps, the old number's tie-crediting behavior made explicit), and `expected_agreement_random_tiebreak` (probability of matching under a uniform random tie-break).
+
+Re-running the same fixture with the tie fix (`bench/checkpoints/E5-external-objective-tiefix.json`):
+
+| Metric | Design strict | Design tie-aware | Design ρ | Held-out strict | Held-out tie-aware | Held-out ρ |
+|---|---:|---:|---:|---:|---:|---:|
+| `E_DCY^Σ` (sigma) | 0.150 | 0.383 | 0.8266 | 0.100 | 0.300 | 0.7946 |
+| `Ē_DCY` (average) | **0.000** | 1.000 | 0.8701 | **0.025** | 0.975 | 0.8769 |
+| `-Cost` | 0.400 | 0.400 | -0.0819 | 0.400 | 0.400 | -0.0114 |
+| `J_DCY` | 0.883 | 0.883 | 0.1862 | 0.925 | 0.925 | 0.2654 |
+| `J_norm` | 0.917 | 0.917 | 0.4665 | 0.850 | 0.850 | 0.5235 |
+| `Random` | 0.533 | 0.533 | -0.0117 | 0.375 | 0.375 | 0.0389 |
+
+The originally reported "0.975 held-out agreement" for `Ē_DCY` was `tie_aware_agreement`, effectively `focused` winning on tie by construction: `strict_agreement` for the same metric is **0.025**, meaning `Ē_DCY` almost never uniquely picks the observed-best route once ties are not credited to it. `J_DCY` and `J_norm`, which include the cost term and rarely tie, keep essentially the same strict and tie-aware numbers (0.883–0.925), so their earlier agreement figures were not inflated by this bug — but their ρ against `observed_utility` is far weaker (0.19–0.53) than `Ē_DCY`'s reported 0.87–0.88, and that ρ is itself compromised by leakage (bug 1). No metric here should be read as validated route selection.
+
+`H_E5` is **not** supported by this benchmark once both bugs are accounted for: the strong `Ē_DCY` numbers were a mix of gold-label leakage inflating ρ and tie-order bias inflating agreement. The corrected, still-imperfect picture is that `J_DCY`/`J_norm` (which do use tie-safe scores because cost breaks ties) show moderate strict agreement with weak-to-moderate ρ, while `Ē_DCY` shows strong ρ but that ρ is not independently earned and its strict agreement collapses. The practical result is unchanged in direction — require external correctness for evaluation, then compare efficiency among valid routes — but the specific numeric claim of "`Ē_DCY` outperforms" is retracted pending a leakage-free feature set (E6.1's observable-only state, which does not read `task["gold"]`).
 
 This is retrospective trajectory ranking, not prospective planning. In evaluation, `Success_external(π)` may be observed after executing a preconstructed route. A future planner cannot use that value before execution; it must estimate the next step from current state:
 
@@ -384,7 +393,7 @@ The first prospective policy experiment is reserved for **E6 — Prospective Pla
 
 ### E6.0 — Audit before prospective planning
 
-Before building a selector, `bench/e6_audit.py` audits E5 at the unit where a planner would actually decide: **within each task**, not across all routes from all tasks. This prevents global correlation from being inflated by between-task difficulty. It also checks split integrity, routes per task, ties, tasks with no successful route, and future-information leakage.
+Before building a selector, `bench/e6_audit.py` audits E5 at the unit where a planner would actually decide: **within each task**, not across all routes from all tasks. This prevents global correlation from being inflated by between-task difficulty. It also checks split integrity, routes per task, ties, tasks with no successful route, and future-information leakage. The leakage result is derived from the score fields present in the artifact; it is not a hard-coded pass/fail assertion.
 
 The audit found:
 
@@ -404,7 +413,7 @@ Within-task results against externally checked success-per-cost utility:
 | `Ē_DCY` | 0.6164 | 0.9487 | **0.990** |
 | `-Cost` | -0.0249 | 0.0000 | 0.340 |
 
-The earlier global E5 correlation for `Ē_DCY` was 0.8827; the within-task mean is 0.6164. The difference is a methodological warning, not a contradiction: the global statistic included between-task variation, while a selector needs within-task discrimination. `Ē_DCY` still chooses an observed winning route in 99% of tasks when ties receive credit, but its correlation is substantially weaker once the task is held constant. The 34 tasks with no successful route also cannot provide a meaningful winner comparison and must remain in the denominator rather than being silently filtered.
+The earlier global E5 correlation for `Ē_DCY` was 0.8827; the within-task mean is 0.6164. The difference is a methodological warning, not a contradiction: the global statistic included between-task variation, while a selector needs within-task discrimination. `Ē_DCY` still chooses an observed winning route in 99% of tasks when ties receive credit, but its correlation is substantially weaker once the task is held constant. The 34 tasks with no successful route also cannot provide a meaningful winner comparison and must remain in the denominator rather than being silently filtered. The mandatory `always-focused` baseline succeeds on 27/40 held-out tasks (67.5%) and agrees with the observed best utility on 38/40 (95%). The E5/E6 route order is therefore not a fair claim of broad planning gain: `Ē_DCY` reaches 39/40 agreement with tie credit, but the direct improvement over always-focused is only one held-out task under this artifact.
 
 This changes E6's order. E6.1 must first define a prospective action environment: concrete actions (`search`, `expand`, `read_source`, `increase_resolution`, `verify`, `finish`), state fields for pending obligations, evidence, hypotheses, contradictions, history and remaining resources, plus a candidate generator that uses only the current state, task and accessible index. E6.2 then compares fixed-plan, immediate relevance, marginal obligation coverage, `\widehat{\bar E}_{DCY}`, and random under identical budgets. The selector is evaluated after execution with:
 
@@ -436,11 +445,168 @@ history           actions, repetition and newly produced evidence
 remaining        physical tokens, calls, steps and latency
 ```
 
-Actions are closed values — `Search`, `Expand`, `ReadSource`, `Verify`, `IncreaseResolution`, `Finish` — rather than unconstrained text. A hypothesis starts as `Unverified`; model output cannot silently become confirmed evidence. The prospective callbacks must use only `S_t` and `a_t` for estimated outcomes. Benchmark-only environment outcomes and hidden/external success are evaluation data, never inputs to a prospective selector.
+Actions are closed values — `Search`, `Expand`, `ReadSource`, `Verify`, `IncreaseResolution`, `Finish` — rather than unconstrained text. Each action carries a vector `ResourceCost` over physical tokens, model calls, latency and steps; it is legal only when it fits the corresponding remaining `Budget` component by component. `consume()` is the tested budget transition primitive.
 
-`prospective_q` enforces the current mathematical contract: `gamma ∈ [0,1]`, legal actions only, non-negative outcome probabilities, probabilities summing to one, and at least one modeled outcome. A terminal state or state with no legal next action contributes zero future value; finite horizon guarantees termination. Budget propagation belongs in the callback transition, which must decrement `State.remaining`. Memoization by `(StateHash,horizon)` is deliberately not present until the concrete state has a stable hash.
+The environment and the selector have separate outcome contracts:
+
+```text
+EnvironmentOutcome  = what actually happened after execution
+EstimatedOutcome    = what the selector predicted before execution
+```
+
+Only estimated outcomes may enter `prospective_q`; external success, hidden assertions and future gold evidence stay outside the selector. A hypothesis starts as `Unverified`; model output cannot silently become confirmed evidence. The prospective callbacks must use only `S_t` and `a_t` for estimated outcomes.
+
+`prospective_q` enforces the current mathematical contract: `gamma ∈ [0,1]` and finite, legal actions only, finite non-negative progress and outcome probabilities, probabilities summing to one, and at least one modeled outcome. `finite_horizon_q`, `local`, costs and action scores reject non-finite values such as `NaN` and `Inf`. A terminal state or state with no legal next action contributes zero future value; finite horizon guarantees termination. Budget propagation belongs in the callback transition, which must decrement `State.remaining`. Memoization by `(StateHash,horizon)` is deliberately not present until the concrete state has a stable hash. The test also covers a genuinely probabilistic action with two valid outcomes, not only deterministic branches.
 
 E6.1 is therefore a contract and evaluator test, not a planner result. The remaining empirical objects are `\widehat P(o\mid S,a)` and `\Phi(S)`. E6.2 must first compare next-action policies under a common candidate generator — fixed, immediate relevance, marginal obligation coverage, estimated `Q`, and random — and record unavailable necessary actions separately from bad selections.
+
+### E6.2 — Softmax action selection (ready primitive, not a planner default)
+
+`select_best_action` performs deterministic argmax over `Q_DCY^(h)`. Softmax is a ready, tested selection policy on top of the same score, not a replacement for it:
+
+```math
+\pi_{DCY}(a\mid S_t)=\frac{e^{\widehat{Q}_{DCY}^{(h)}(S_t,a)/\tau}}{\sum_{a'\in A(S_t)}e^{\widehat{Q}_{DCY}^{(h)}(S_t,a')/\tau}}
+```
+
+The motivation is that argmax collapses near-equal candidate actions to a single winner even when `Q_hat` is noisy, while a low-`\tau` softmax stays close to greedy and a high-`\tau` softmax flattens the distribution and admits exploration. As `\tau\to 0`, `argmax_a \pi_{DCY}(a\mid S_t) \to argmax_a \widehat{Q}_{DCY}^{(h)}(S_t,a)`, so softmax is a strict generalization of the existing selector rather than a divergent one, but that limit equivalence is not itself evidence that softmax helps at any finite `\tau`.
+
+This is sequenced after, not inside, E6.2's baseline comparison: `select_best_action` stays the greedy default, and softmax is the stochastic alternative the E6.2-A harness invokes explicitly. The primitive is ready today — `src/efficiency.hpp` ships `softmax_distribution`, `sample_from_distribution`, and `softmax_select_action`, all covered by `tests/efficiency_test.cpp::test_softmax_action_distribution` (build + `ctest --test-dir build` green). What is still open is the empirical comparison, not the code: an E6 prospective run must report `Success@Budget` for at least argmax `Q`, softmax `Q` at more than one `tau`, random, immediate relevance, and marginal obligation coverage, on the same tasks and budgets. The open questions are whether softmax improves `Success@Budget` over plain argmax, what `tau` generalizes rather than overfits the design split, whether stochastic selection helps specifically when `Q_hat` is noisy, whether it hurts on deterministic tasks where one action strictly dominates, and whether it is worth the added variance at all compared to the simpler baselines already in E6.2's list.
+
+Ready status: `softmax_distribution` normalizes with max-subtraction for numerical stability, `sample_from_distribution` takes a caller-supplied uniform draw (seeded RNG in harnesses, no hidden random state), and `softmax_select_action` composes both for one-shot candidate selection. None of the three overrides `select_best_action` or any CLI path — the harness chooses argmax vs softmax explicitly per run. `tests/efficiency_test.cpp::test_softmax_action_distribution` checks that the distribution sums to one, that a near-zero `tau` reproduces `select_best_action`'s winner, that a large `tau` flattens toward uniform, and that non-finite/non-positive temperatures and out-of-range draws are rejected the same way the rest of this header rejects invalid input.
+
+### E6.2 candidate — h-explosion mitigation (pruning, memoization, receding horizon)
+
+`prospective_q`'s branching is `O(actions × outcomes)^h`. With 10 actions and 3 outcomes each (`b≈30`), a synthetic benchmark using the same branching shape (not a DCY task) shows the outcome-model call count at `h=1..4`:
+
+```text
+EXACT      h=1  calls=1       h=2  calls=31      h=3  calls=931      h=4  calls=27931
+```
+
+which matches the `30^(h-1)`-ish growth this section warned about — not an estimate, a measured call count from a synthetic branching-30 tree. Three independent primitives exist in `src/efficiency.hpp`/`src/planning.hpp` to address this; none is wired into a planner default:
+
+- `top_k_actions(state, actions, cheap_score, k)` — prunes the candidate action set with a caller-supplied cheap heuristic *before* Bellman recursion runs. On the same synthetic tree, pruning to the top 4 actions per node cuts `h=4` calls from 27,931 to 1,885 (14.8× fewer), but the resulting value estimate differs from the exact one (1.166 vs 1.284 in that run) — pruning is not free, and its effect on `Success@Budget` must be measured, not assumed harmless, per the earlier note on `prune_outcomes`.
+- `prune_outcomes(outcomes, keep_threshold)` — keeps the highest-probability outcomes until their cumulative probability reaches `keep_threshold`, drops the rest, and rescales the kept set back to sum to one (`prospective_q` requires normalized probabilities). Always keeps at least one outcome.
+- `memoized_prospective_q(..., state_hash, action_hash, cache)` — a caching wrapper around the same Bellman recursion, keyed by `(StateHash, ActionHash, horizon)` via `combine_hash`. On the synthetic tree, memoization alone reduced `h=4` calls from 27,931 to 16,161 (~42%); the gain depends entirely on how often the caller's `state_hash` collides across different action sequences, which for a real DCY state (E6.1's `State`, still without a stable hash) is unknown until measured. `cache.size()` after a call is a usable `NodesExpanded` proxy for the E6.2-A experiment below.
+- `dcy::planning::drop_no_progress_repeats(history, candidates, action_equal)` — removes a candidate action from the generator's output if the same action already ran in `history` and produced no new evidence, using a caller-supplied equality (e.g. same `ActionType` and `target`). This targets exactly the `SEARCH foo / SEARCH foo / SEARCH foo` loop pattern, not general repetition.
+
+All four are tested in `tests/efficiency_test.cpp` (`test_action_pruning_before_bellman`, `test_outcome_pruning_by_cumulative_probability`, `test_memoized_prospective_q_matches_exact`, `test_drop_no_progress_repeats`); the memoization test explicitly checks the memoized and unmemoized Bellman value agree exactly, not just that the cache fills.
+
+The architectural direction implied by these numbers — and not yet built — is receding-horizon (MPC-style) planning: keep `h` small (2–3), plan from `S_t`, execute one action, observe the real outcome, replan from `S_{t+1}`, rather than planning an entire trajectory from `S_0` at one horizon. This requires a terminal value estimate `\widehat V(S_{t+h})` so a small horizon does not ignore reward that lands just past it — `finite_horizon_q` and `prospective_q` already support this shape (`gamma^h` weighting a future term), but no `\widehat V` estimator exists yet. The next real experiment (**E6.2-A**, not yet run) is comparing `Random`, `Fixed`, `immediate relevance`, `marginal obligation coverage`, and `Q_DCY` at `h=1,2,3` under one shared `ActionGenerator`, identical budgets, on identical tasks, reporting `Success@Budget` *and* `NodesExpanded`/planner latency together — not assuming `h=3 > h=2`, since the compute cost may not be worth it. That comparison is the actual test of `h* = argmax_h Success(h)/Compute(h)`, and it does not exist in this repository yet.
+
+### E6.2 candidate — observable-only terminal value estimate (V-hat)
+
+Two rules are adopted for this project going forward, in response to the E5 leakage finding above:
+
+```text
+No metric used for planning may depend on gold or hidden evaluation data.
+Never increase horizon before proving the previous horizon improves Success@Budget.
+```
+
+`src/planning.hpp` implements `\widehat V(S)` as a deliberately boring, unweighted average over observable ratios computed only from `dcy::planning::State` — no networks, no training, no gold:
+
+$$
+O(S)=\frac{\text{obligations resolved}}{\text{obligations total}}
+\quad
+V(S)=\frac{\text{verified evidence}}{\max(1,\text{all evidence})}
+\quad
+X(S)=\frac{\text{contradictions resolved}}{\max(1,\text{contradictions discovered})}
+$$
+
+$$
+R(S)=\frac{\text{no-progress repeated actions}}{\max(1,\text{actions executed})}
+\qquad
+B(S)=\frac{\text{remaining budget}}{\text{initial budget}}
+$$
+
+$$
+\boxed{
+\widehat V_0(S)=\frac{O(S)+V(S)+X(S)+B(S)-R(S)}{4}
+}
+$$
+
+clamped to `[0,1]`. This is a hypothesis-only baseline, not a claimed-correct formula — it exists to be falsified by an ablation. `Evidence` gained a `verified` field (default `false`) so `V(S)` has something observable to read; it is set by whatever cross-checks evidence within the state, never by a hidden/gold label. `obligations_resolved_ratio`, `verified_evidence_ratio`, `contradictions_resolved_ratio`, `no_progress_ratio`, and `budget_remaining_ratio` are each independently computable and independently tested, so an ablation can add them one at a time via `estimate_value(state, initial_budget, level)`, where `level` is `ValueEstimateLevel::V0Obligations` through `V4Repetition`:
+
+```text
+V0: obligations only
+V1: + verified evidence
+V2: + contradictions
+V3: + remaining budget
+V4: + repetition penalty (the full boxed formula)
+```
+
+`budget_exhausted(remaining)` formalizes one of the recursion's stopping conditions (any single resource component at zero); `is_repeated_without_progress`/`drop_no_progress_repeats` from the previous section formalize the other. A receding-horizon recursion is expected to look like:
+
+```cpp
+if (horizon == 0) return estimate_value(state, initial_budget);
+if (budget_exhausted(state.remaining)) return estimate_value(state, initial_budget);
+// caller checks is_repeated_without_progress per candidate before recursing
+```
+
+None of `estimate_value`, `budget_exhausted`, or the individual ratio functions is called from `prospective_q`, `select_best_action`, or any planner default — they are primitives for the E6.2-A ablation below, tested in `tests/efficiency_test.cpp::test_observable_value_estimate_ablation_ladder` (each ratio checked independently, each ablation level checked against the exact arithmetic of the boxed formula — not assumed to cancel out, since the first draft of this test asserted the repetition penalty would net back to the pre-penalty value and a real run caught that it does not: subtracting `R(S)/4` from a 3-term average produces a different number than a 4-term average, exactly as the formula specifies).
+
+E6.2-A itself — the actual comparison of `Random`, `Fixed`, `immediate relevance`, `marginal obligation coverage`, and `Q_DCY` at `h=1,2,3` with and without `\widehat V`, on real DCY tasks, reporting `Success@Budget`, `NodesExpanded`, planner wall time, and a `PlanningEfficiency = Success@Budget / NodesExpanded` engineering metric — has not been run. It is the next concrete step, not a result to report yet.
+
+## Design principle — semantic paging
+
+> **DCY virtualizes context by repeatedly materializing distilled regions of a larger externally addressable token space while preserving task state across windows.**
+
+The analogy to virtual memory is deliberate:
+
+```text
+virtual memory:                    DCY:
+virtual address                    context need (goal + state)
+→ page fault                       → context fault: PT lacks info for next reasoning step
+→ load page from disk              → retrieve + distill region from DB/index
+→ CPU continues with same state    → LLM continues with same externalized state
+```
+
+Formally, each step materializes a physical context from a virtual token space:
+
+```math
+C_t = D(VT, S_t, a_t, B)
+```
+
+where `VT` is the full externally addressable token space (the indexed repository), `S_t` is the persistent task state (obligations, evidence, hypotheses, contradictions, history, remaining budget — the `dcy::planning::State` struct), `a_t` is the selected action (which region/goal to focus on), `B` is the physical token budget, and `C_t` is the distilled context the LLM actually sees. The LLM's output is then:
+
+```math
+o_t = LLM(C_t, M_t)
+```
+
+where `M_t` is a small continuity capsule from the previous step (in the current code: the `STATE` lines that `render()` injects from the `observations` table, line 375-385 of `main.cpp`). The key property is that `C_t + M_t` should make the model experience continuity equivalent to having seen the relevant parts of `VT`, even though the raw source is no longer physically present.
+
+This is not RAG. RAG is `query → retrieve docs → answer` — a single retrieval step without persistent state or multi-step context management. DCY is:
+
+```text
+persistent task state S_t
+→ context fault (current PT lacks evidence for next step)
+→ select region (goal engine / action)
+→ distill (distiller packs entities under budget)
+→ LLM reasons within physical window
+→ externalize state update (dcy record / observations table)
+→ next context fault
+→ ...
+```
+
+The difference is that each distilled window becomes part of the cognitive continuity of the process, even though it does not persist physically. This is what makes VT meaningful: it is not a compression claim, but a measure of the externally addressable space that DCY can bring into a bounded window on demand, step by step, while the LLM's task state survives across windows via the external `State`.
+
+**Implementation map** — what exists and what does not:
+
+| Semantic paging concept | Code | Status |
+|---|---|---|
+| Virtual token space (VT) | SQLite index built by `dcy index` | Implemented, used |
+| Context fault (need → retrieve) | `retrieve()` in `main.cpp:321` (FTS + graph expansion) | Implemented, used |
+| Distill region under budget | `distiller::make_view()` with ref-first two-pass packing | Implemented, used |
+| Multi-resolution encoding | `ormt::encode()` at `Detail`/`Compact`/`Ref` levels | Implemented, used |
+| Exact source on demand | `dcy source` (verified hash, bounded span) | Implemented, used |
+| Continuity capsule M_t | `STATE` lines from `observations` table, injected by `render()` | Implemented, used (3 most recent observations) |
+| Externalize state update | `dcy record` (hypotheses, facts, results per goal) | Implemented, used |
+| Context fault detection | `api/dcy_consumer.py` v2: deterministic sub-goal engine drives paging, LLM only reads/writes plain text | Ready runtime (`--stub` green; Ollama `gemma3:4b` answered, `qwen3:0.6b` produced correct symbols) |
+| Goal-driven action selection | `dcy::planning::ActionType` enum (Search, Expand, ReadSource, Verify, IncreaseResolution, Finish) + `decompose_task()` locate → relations → source → synthesize in `api/dcy_consumer.py` | Runtime wired (deterministic decomposition; selector policies still explicit per-run) |
+| Prospective action scoring | `prospective_q` / `memoized_prospective_q` / `softmax_distribution` | Ready primitives, tested, harness-selected (not a CLI default) |
+| Terminal value estimate | `estimate_value()` with ablation ladder V0-V4 | Ready primitive, tested, harness-selected (not a CLI default) |
+| Receding-horizon loop | `run_paging_runtime()` in `api/dcy_consumer.py`: materialize page → LLM observes → `dcy record` → `SeenSet` update → cut → distill capsule → advance sub-goal → final synthesis | Ready runtime (deterministic goals; full `plan(h) → act → replan` with learned policies is still E6.2-A) |
+
+The remaining gap is E6.2-A measurement, not missing runtime code: the paging loop runs today (`python3 api/dcy_consumer.py --dcy build/dcy --db build/corpus-1m.sqlite --task "..." --budget 512 --max-goals 4 --stub`), the planner primitives are tested, but no run yet proves which selector/horizon/`tau`/V-hat level improves `Success@Budget` over the baselines. That comparison is the next concrete step.
 
 The first E5 run exposed and fixed a harness boundary: `dcy source` correctly rejected a gold span larger than the verifier's initial 4 KiB limit. The rerun uses an explicit 1 MiB benchmark limit and records the original failure rather than hiding it.
 

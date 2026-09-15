@@ -1,6 +1,6 @@
 {
   "kind": "e6_0_e5_audit",
-  "source": "build/e5-external-objective.json",
+  "source": "bench/checkpoints/E5-external-objective-tiefix.json",
   "tasks": 100,
   "trajectories": 500,
   "split_trajectory_counts": {
@@ -12,30 +12,30 @@
   },
   "task_split_conflicts": [],
   "global_rho": {
-    "sigma": 0.8212263623103074,
-    "average": 0.8769912241345948,
-    "cost": -0.058856708104838756
+    "sigma": 0.8152564011879008,
+    "average": 0.8730385214656392,
+    "cost": -0.05221078584072588
   },
   "always_focused_baseline": {
     "all": {
       "tasks": 100,
       "successes": 64,
       "success_rate": 0.64,
-      "mean_observed_utility": 0.017000978391081813,
+      "mean_observed_utility": 0.01642470520245424,
       "agreement_with_observed_best": 0.98
     },
     "design": {
       "tasks": 60,
       "successes": 37,
       "success_rate": 0.6166666666666667,
-      "mean_observed_utility": 0.016086631840458387,
+      "mean_observed_utility": 0.015492579434399295,
       "agreement_with_observed_best": 1.0
     },
     "held_out": {
       "tasks": 40,
       "successes": 27,
       "success_rate": 0.675,
-      "mean_observed_utility": 0.018372498217016947,
+      "mean_observed_utility": 0.017822893854536656,
       "agreement_with_observed_best": 0.95
     }
   },
@@ -126,7 +126,7 @@
     },
     "cost": {
       "tasks": 100,
-      "mean_within_task_rho": -0.024936602049066843,
+      "mean_within_task_rho": -0.020936602049066843,
       "median_within_task_rho": 0.0,
       "winner_agreement_with_tie_credit": 0.34,
       "tasks_without_successful_route": [
