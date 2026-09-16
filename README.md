@@ -9,7 +9,7 @@
 <h1 align="center">DCY</h1>
 
 <p align="center">
-  <strong>Dynamic Context Injection</strong>
+  <strong>change acronym cause a random guy remember me this exist :v</strong>
 </p>
 
 <p align="center">
